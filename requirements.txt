@@ -1,0 +1,7 @@
+numpy>=1.23
+pandas>=1.5
+scipy>=1.9
+matplotlib>=3.7
+openpyxl>=3.1
+pillow>=9.0
+hidapi>=0.14 ; sys_platform == "win32"
