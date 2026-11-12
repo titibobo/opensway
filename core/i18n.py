@@ -350,6 +350,15 @@ FR = {
     "Invalid value for '{}'.":          "Valeur invalide pour « {} ».",
     "Interface":                        "Interface",
     "Language":                         "Langue",
+    "Settings":                         "Réglages",
+    "Apply":                            "Appliquer",
+    "Changes are applied with the « Apply » button.":
+        "Les modifications s'appliquent avec le bouton « Appliquer ».",
+    "Settings applied: results will be recomputed.":
+        "Réglages appliqués : les résultats seront recalculés.",
+    "No change.":                       "Aucun changement.",
+    "Restart OpenSway now to change the language?\n(the board will be disconnected)":
+        "Redémarrer OpenSway maintenant pour changer de langue ?\n(la planche sera déconnectée)",
     "The language will change at the next start of OpenSway.":
         "La langue changera au prochain démarrage d'OpenSway.",
 

@@ -22,7 +22,7 @@ from core.params             import ADVANCED_SETTINGS, RQA_MODES, RESAMPLING_MOD
 from core.pipeline           import run_pipeline
 from core.export_pdf_report  import make_report_figures, make_subject_report
 from core.design             import parse_name, folder_factors, aggregate_metrics, with_trial_sd
-from core.design             import time_order_key, describe_file
+from core.design             import time_order_key, describe_file, format_pm
 from core.design             import build_tables, settings_table, write_results
 from core.fileformat         import read_header
 from core.i18n               import tr, metric_label, metric_tooltip, get_language, LANGUAGES
@@ -30,6 +30,14 @@ from core.i18n               import tr, metric_label, metric_tooltip, get_langua
 from gui.common              import ToolTip, resource_path, center_window, save_config, VERSION
 
 from dataclasses import fields
+
+
+def _pm(metrics: dict, k_mean: str, k_sd: str) -> str:
+    """ "moyenne ± ET" : essai seul (ET intra-essai) ou sujet (ET entre essais, déjà formaté) """
+    m, sd = metrics.get(k_mean), metrics.get(k_sd)
+    if isinstance(sd, str):                     # vue Sujets : with_trial_sd()
+        return f"{m} ± {sd}"
+    return format_pm(m, sd)
 
 
 class AnalysisPanel(ttk.Frame):
@@ -72,7 +80,7 @@ class AnalysisPanel(ttk.Frame):
                 if tip:
                     ToolTip(label_name, tip)
 
-                ttk.Label(subframe, textvariable=var, width=13, anchor='center',
+                ttk.Label(subframe, textvariable=var, width=15, anchor='center',
                         relief='sunken').grid(row=i, column=1, sticky='w', padx=4, pady=1)
 
         ## =====================================================================
@@ -178,11 +186,9 @@ class AnalysisPanel(ttk.Frame):
         sep3 = ttk.Separator(left, orient='horizontal')
         sep3.grid(row=7, column=0, sticky='ew', pady=8)
 
-        ttk.Button(left, text=tr("Advanced settings..."),   command=self.open_settings).grid(row=8, column=0, sticky='ew', pady=2)
-        ttk.Button(left, text=tr("Process filelist"),       command=self.process_selected).grid(row=9, column=0, sticky='ew', pady=2)
-        ttk.Button(left, text=tr("Compare..."),             command=self.open_compare).grid(row=10, column=0, sticky='ew', pady=2)
-        ttk.Button(left, text=tr("Export selected report"), command=self.export_report).grid(row=11, column=0, sticky='ew', pady=2)
-        ttk.Button(left, text=tr("Export all results"),     command=self.export_all).grid(row=12, column=0, sticky='ew', pady=2)
+        ttk.Button(left, text=tr("Compare..."),             command=self.open_compare).grid(row=8, column=0, sticky='ew', pady=2)
+        ttk.Button(left, text=tr("Export selected report"), command=self.export_report).grid(row=9, column=0, sticky='ew', pady=2)
+        ttk.Button(left, text=tr("Export all results"),     command=self.export_all).grid(row=10, column=0, sticky='ew', pady=2)
 
 
         ## =====================================================================
@@ -196,21 +202,12 @@ class AnalysisPanel(ttk.Frame):
         tab_pos = ttk.Frame(right)
         right.add(tab_pos, text=tr("Positional Parameters"))
 
-        tab_pos.rowconfigure(0, weight=0)      # stabilograms plot
-        tab_pos.rowconfigure(1, weight=1)      # metrics+SKG plot
+        tab_pos.rowconfigure(0, weight=1)      # metrics + SKG plot
         tab_pos.columnconfigure(0, weight=0)   # metrics
         tab_pos.columnconfigure(1, weight=1)   # SKG plot
 
-        pos_plotstab_frm = ttk.Frame(tab_pos)
-        pos_plotstab_frm.grid(row=0, column=0, columnspan=2, sticky='nsew', padx=0, pady=0)
-
-        self.fig_stab = Figure(figsize=(5, 1.2), dpi=100)
-        self.ax_stab = self.fig_stab.add_subplot(1, 1, 1)
-        self.canvas_stab = FigureCanvasTkAgg(self.fig_stab, master=pos_plotstab_frm)
-        self.canvas_stab.get_tk_widget().pack(fill='both', expand=True)
-
         pos_metrics_frm = ttk.Frame(tab_pos)
-        pos_metrics_frm.grid(row=1, column=0, sticky='nsw', padx=3, pady=3)
+        pos_metrics_frm.grid(row=0, column=0, sticky='nsw', padx=3, pady=3)
 
         self.pos_duration_var = tk.StringVar(value="")
         
@@ -221,7 +218,7 @@ class AnalysisPanel(ttk.Frame):
             row=0, column=0, sticky='w', padx=4, pady=1)
 
         ttk.Label(duration_frm, textvariable=self.pos_duration_var,
-                    width=13, anchor='center', relief='sunken').grid(
+                    width=15, anchor='center', relief='sunken').grid(
                             row=0, column=1, sticky='w', padx=4, pady=1)
         
 
@@ -238,7 +235,7 @@ class AnalysisPanel(ttk.Frame):
         pos_metrics_subfrm_geom.grid(row=3, column=0, sticky='new', padx=0, pady=3)
 
         pos_plotskg_frm = ttk.Frame(tab_pos)
-        pos_plotskg_frm.grid(row=1, column=1, sticky='nsew', padx=0, pady=0)
+        pos_plotskg_frm.grid(row=0, column=1, sticky='nsew', padx=0, pady=0)
         pos_plotskg_frm.rowconfigure(0, weight=1)
         pos_plotskg_frm.columnconfigure(0, weight=1)
 
@@ -272,7 +269,7 @@ class AnalysisPanel(ttk.Frame):
             row=0, column=0, sticky='w', padx=4, pady=1)
 
         ttk.Label(duration_frm, textvariable=self.pos_duration_var,
-                    width=13, anchor='center', relief='sunken').grid(
+                    width=15, anchor='center', relief='sunken').grid(
                             row=0, column=1, sticky='w', padx=4, pady=1)
 
 
@@ -293,7 +290,13 @@ class AnalysisPanel(ttk.Frame):
         dyn_metrics_subfrm_adv.grid(row=4, column=0, sticky='new', padx=0, pady=3)
 
         dyn_plot_frm = ttk.Frame(tab_dyn)
-        dyn_plot_frm.grid(row=0, column=1, sticky='nsew', padx=6, pady=6)
+        dyn_plot_frm.grid(row=0, column=1, sticky='nsew', padx=0, pady=0)
+
+        self.fig_stab    = Figure(figsize=(5, 4), dpi=100)
+        self.ax_stab_ml  = self.fig_stab.add_subplot(2, 1, 1)
+        self.ax_stab_ap  = self.fig_stab.add_subplot(2, 1, 2, sharex=self.ax_stab_ml)
+        self.canvas_stab = FigureCanvasTkAgg(self.fig_stab, master=dyn_plot_frm)
+        self.canvas_stab.get_tk_widget().pack(fill='both', expand=True)
 
         self.dynamic_vars: Dict[str, tk.StringVar] = {}
 
@@ -634,102 +637,6 @@ class AnalysisPanel(ttk.Frame):
         except tk.TclError:
             pass
 
-    # == Advanced settings =====================================================
-    def open_settings(self):
-        win = tk.Toplevel(self)
-        win.title(tr("Advanced settings"))
-        win.transient(self)
-        win.resizable(False, False)
-
-        defaults = Params()
-        types    = {f.name: type(getattr(defaults, f.name)) for f in fields(Params)}
-        tkvars: Dict[str, tk.Variable] = {}
-        frames: Dict[str, ttk.LabelFrame] = {}
-        rows:   Dict[str, int] = {}
-
-        for group, attr, label in ADVANCED_SETTINGS:
-            if group not in frames:
-                k  = len(frames)
-                fr = ttk.LabelFrame(win, text=tr(group), labelanchor='n')
-                fr.grid(row=k // 2, column=k % 2, sticky='new', padx=6, pady=4)
-                frames[group], rows[group] = fr, 0
-            fr, i = frames[group], rows[group]
-            value = getattr(self.params, attr)
-
-            ttk.Label(fr, text=tr(label)).grid(row=i, column=0, sticky='w', padx=4, pady=2)
-            if types[attr] is bool:
-                var = tk.BooleanVar(value=value)
-                ttk.Checkbutton(fr, variable=var).grid(row=i, column=1, sticky='w', padx=4)
-            elif attr in ("rqa_mode", "resampling"):
-                var = tk.StringVar(value=value)
-                ttk.Combobox(fr, textvariable=var, state='readonly', width=12,
-                             values=RQA_MODES if attr == "rqa_mode" else RESAMPLING_MODES
-                             ).grid(row=i, column=1, sticky='w', padx=4)
-            else:
-                var = tk.StringVar(value=str(value))
-                ttk.Entry(fr, textvariable=var, width=8).grid(row=i, column=1, sticky='w', padx=4)
-            tkvars[attr]  = var
-            rows[group]  += 1
-
-        # Interface : langue (appliquée au prochain démarrage)
-        k  = len(frames)
-        fr = ttk.LabelFrame(win, text=tr("Interface"), labelanchor='n')
-        fr.grid(row=k // 2, column=k % 2, sticky='new', padx=6, pady=4)
-        frames["Interface"] = fr
-        lang_var = tk.StringVar(value=get_language())
-        ttk.Label(fr, text=tr("Language")).grid(row=0, column=0, sticky='w', padx=4, pady=2)
-        ttk.Combobox(fr, textvariable=lang_var, values=LANGUAGES, state='readonly',
-                     width=12).grid(row=0, column=1, sticky='w', padx=4)
-
-        def _reset():
-            for attr, var in tkvars.items():
-                d = getattr(defaults, attr)
-                var.set(d if types[attr] in (bool, str) else str(d))
-
-        def _convert(attr: str, v):
-            t = types[attr]
-            if t is bool:
-                return bool(v)
-            if t is int:
-                return int(float(v))
-            if t is float:
-                return float(v)
-            return str(v)
-
-        def _apply():
-            new = {}
-            for attr, var in tkvars.items():
-                try:
-                    new[attr] = _convert(attr, var.get())
-                except ValueError:
-                    messagebox.showerror(tr("Advanced settings"), tr("Invalid value for '{}'.").format(attr), parent=win)
-                    return
-            changed = [a for a, v in new.items() if getattr(self.params, a) != v]
-            for attr, v in new.items():
-                setattr(self.params, attr, v)
-            self._refresh_params()
-            if changed:
-                self.cache.clear()
-                self._log(f"[Settings] changed: {', '.join(changed)} (results will be recomputed)")
-            if lang_var.get() != get_language():
-                save_config(language=lang_var.get())
-                messagebox.showinfo(tr("Language"),
-                                    tr("The language will change at the next start of OpenSway."),
-                                    parent=win)
-            win.destroy()
-
-        btns = ttk.Frame(win)
-        btns.grid(row=(len(frames) + 1) // 2, column=0, columnspan=2, sticky='e', padx=6, pady=6)
-        ttk.Button(btns, text=tr("Reset to defaults"), command=_reset).grid(row=0, column=0, padx=2)
-        ttk.Button(btns, text=tr("Cancel"),            command=win.destroy).grid(row=0, column=1, padx=2)
-        ttk.Button(btns, text=tr("OK"),                command=_apply).grid(row=0, column=2, padx=2)
-
-        center_window(win, self.winfo_toplevel())
-        try:
-            win.grab_set()
-        except tk.TclError:
-            pass
-
     def _refresh_params(self):
         self.params.fmax = self.params.butter_fc
 
@@ -835,8 +742,8 @@ class AnalysisPanel(ttk.Frame):
     def _plot_subject(self, name: str, series_list: List[Dict[str, np.ndarray]], metrics: dict, p: Params):
 
         # == plot: STABILOGRAMS + STATOKINESIGRAMS (trials overlaid) ===
-        pl.plot_stabilogram_multi(self.ax_stab, series_list, name)
-        self.fig_stab.subplots_adjust(left=0.08, right=0.98, bottom=0.18, top=0.88)
+        pl.plot_stabilograms(self.ax_stab_ml, self.ax_stab_ap, series_list, name)
+        self.fig_stab.subplots_adjust(left=0.10, right=0.98, bottom=0.08, top=0.94, hspace=0.12)
         self.canvas_stab.draw()
 
         pl.plot_statokinesigram_multi(self.ax_skg, series_list, name)
@@ -867,8 +774,8 @@ class AnalysisPanel(ttk.Frame):
 
 
         # == plot: STABILOGRAM ===
-        pl.plot_stabilogram(self.ax_stab, t, x, y, filename)
-        self.fig_stab.subplots_adjust(left=0.08, right=0.98, bottom=0.18, top=0.88)
+        pl.plot_stabilograms(self.ax_stab_ml, self.ax_stab_ap, [series], filename)
+        self.fig_stab.subplots_adjust(left=0.10, right=0.98, bottom=0.08, top=0.94, hspace=0.12)
         self.canvas_stab.draw()
 
         # == plot: STATOKINESIGRAM ===
@@ -1039,8 +946,8 @@ class AnalysisPanel(ttk.Frame):
         self.pos_duration_var.set(str(metrics.get('duration')))
 
         mapping = {
-            "ML mean position     (cm) ":  f"{metrics.get('mean_ML')} ±{metrics.get('std_ML')}",
-            "AP mean position     (cm) ":  f"{metrics.get('mean_AP')} ±{metrics.get('std_AP')}",
+            "ML mean position     (cm) ":  _pm(metrics, 'mean_ML', 'std_ML'),
+            "AP mean position     (cm) ":  _pm(metrics, 'mean_AP', 'std_AP'),
 
             "ML RMS               (cm) ":  metrics.get('pos_rms_ML'),
             "AP RMS               (cm) ":  metrics.get('pos_rms_AP'),
@@ -1074,9 +981,9 @@ class AnalysisPanel(ttk.Frame):
             "Global path length   (cm) ":  metrics.get('dyn_length_global'),
             "LFS                (cm⁻¹) ":  metrics.get('dyn_lfs'),
 
-            "ML mean velocity   (cm/s) ":  f"{metrics.get('dyn_meanVeloc_ML')} ±{metrics.get('dyn_sdVeloc_ML')}",
-            "AP mean velocity   (cm/s) ":  f"{metrics.get('dyn_meanVeloc_AP')} ±{metrics.get('dyn_sdVeloc_AP')}",
-            "Global mean vel.   (cm/s) ":  f"{metrics.get('dyn_meanVeloc_global')} ±{metrics.get('dyn_sdVeloc_global')}",
+            "ML mean velocity   (cm/s) ":  _pm(metrics, 'dyn_meanVeloc_ML', 'dyn_sdVeloc_ML'),
+            "AP mean velocity   (cm/s) ":  _pm(metrics, 'dyn_meanVeloc_AP', 'dyn_sdVeloc_AP'),
+            "Global mean vel.   (cm/s) ":  _pm(metrics, 'dyn_meanVeloc_global', 'dyn_sdVeloc_global'),
             "ML 0-crossings set    (-) ":  metrics.get('dyn_zeroCross_ML'),
             "AP 0-crossings set    (-) ":  metrics.get('dyn_zeroCross_AP'),
 

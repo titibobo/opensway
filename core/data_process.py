@@ -62,9 +62,9 @@ def preprocess(rec: Recording, p: Params):
         'native_fs':          round(float(native_fs),1),
         'mean_weight':        round(float(np.mean(rec.total)),1),
         'mean_ML':            round(mean_ML,2),
-        'std_ML':             round(std_ML,1),
+        'std_ML':             round(std_ML,3),
         'mean_AP':            round(mean_AP,2),
-        'std_AP':             round(std_AP,1)
+        'std_AP':             round(std_AP,3)
     }
 
     return t_uniform, x_centered, y_centered, x_filt, y_filt, qc

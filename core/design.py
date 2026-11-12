@@ -1,3 +1,4 @@
+import math
 import os
 import re
 from dataclasses import asdict
@@ -98,6 +99,10 @@ class MeanSD(float):
         return obj
 
     def _dec(self) -> int:
+        # Décimales : 2 chiffres significatifs de l'ET (bornées à 0-3) ;
+        # sinon selon l'ordre de grandeur de la moyenne
+        if self._with_sd() and self.sd > 0:
+            return int(min(3, max(0, 1 - math.floor(math.log10(self.sd)))))
         a = abs(float(self))
         return 3 if a < 1 else 2 if a < 100 else 1 if a < 1000 else 0
 
@@ -107,13 +112,21 @@ class MeanSD(float):
     def __str__(self) -> str:
         d = self._dec()
         m = f"{float(self):.{d}f}"
-        return f"{m}±{self.sd:.{d}f}" if self._with_sd() else m
+        return f"{m} ± {self.sd:.{d}f}" if self._with_sd() else m
 
     def __format__(self, spec: str) -> str:
+        # Moyenne ± ET : décimales adaptées (le format demandé est ignoré)
         if not spec:
             return f"{float(self):.{self._dec()}f}"
-        m = format(float(self), spec)
-        return f"{m}±{format(self.sd, spec)}" if self._with_sd() else m
+        return str(self) if self._with_sd() else format(float(self), spec)
+
+
+def format_pm(mean, sd) -> str:
+    """ "moyenne ± ET" d'un essai, mêmes règles d'arrondi que MeanSD """
+    try:
+        return str(MeanSD(float(mean), float(sd), 2))
+    except (TypeError, ValueError):
+        return f"{mean} ± {sd}"
 
 
 def aggregate_metrics(metrics_list: List[Dict]) -> Dict:

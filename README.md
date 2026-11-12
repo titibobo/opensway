@@ -27,11 +27,11 @@ Le **simulateur** permet de préparer un TP ou de découvrir le logiciel sans pl
 - **Analyse** (BrainBloX Analysis v2.3) : descripteurs positionnels, dynamiques, spectraux,
   stochastiques (SDA, temps critiques par axe) et non linéaires (SampEn, DFA, RQA) ;
   import par fichiers ou dossiers avec reconnaissance sujet / essai / groupe / temps / condition ;
-  vue « Sujets » (moyenne ± ET) ; réglages avancés ; rapports PDF ; export Excel
+  vue « Sujets » (moyenne ± ET) ; onglet Réglages ; rapports PDF ; export Excel
   *Means / Trials / Settings* (colonnes en anglais).
 - **Comparaison** (fenêtre séparée) : 2 à 6 essais ou moyennes, statokinésigrammes superposés,
   diagramme d'un descripteur, tableau avec écart et rapport au premier élément.
-- **Interface en français**, anglais au choix (Réglages avancés → Interface).
+- **Interface en français**, anglais au choix (onglet Réglages, relance immédiate).
 - Lit aussi les anciens fichiers **BrainBLoX** (axe AP redressé comme dans la v2.3).
 
 ## Format de fichier OpenSway v1
@@ -53,7 +53,7 @@ En-tête `# clé : valeur`, puis 8 colonnes séparées par des espaces, **donné
 
 - Ré-échantillonnage **SWARII** à 25 Hz (par défaut), fenêtre 0,25 s (Audiffren & Contal, 2016) —
   la Wii Balance Board échantillonne de façon irrégulière (~60-65 mesures distinctes/s).
-  L'interpolation linéaire reste disponible (Réglages avancés) ; elle redonne exactement les
+  L'interpolation linéaire reste disponible (onglet Réglages) ; elle redonne exactement les
   résultats de BrainBloX Analysis v2.3.
 - Butterworth passe-bas d'ordre 4, 10 Hz, sans déphasage.
 

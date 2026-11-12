@@ -141,13 +141,17 @@ class OpenSwayApp(tk.Tk):
 
         from gui.analysis import AnalysisPanel
         from gui.acquisition import AcquisitionPanel
+        from gui.settings import SettingsPanel
 
+        self.restart = False
         nb = ttk.Notebook(self)
         nb.pack(fill='both', expand=True)
         self.analysis    = AnalysisPanel(nb, self)
         self.acquisition = AcquisitionPanel(nb, self)
+        self.settings    = SettingsPanel(nb, self)
         nb.add(self.acquisition, text=tr("Acquisition"))
         nb.add(self.analysis,    text=tr("Analysis"))
+        nb.add(self.settings,    text=tr("Settings"))
         self.notebook = nb
 
         self.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -171,14 +175,35 @@ class OpenSwayApp(tk.Tk):
         self.analysis._log(msg)
         self.acquisition.set_status_line(msg)
 
+    def _cancel_afters(self):
+        """Annule les rafraîchissements programmés avant de fermer la fenêtre."""
+        # Annulation au niveau Tcl : les commandes Python associées sont
+        # supprimées ensuite par destroy() (after_cancel les supprimerait deux fois)
+        for aid in self.tk.splitlist(self.tk.call('after', 'info')):
+            try:
+                self.tk.call('after', 'cancel', aid)
+            except tk.TclError:
+                pass
+
+    def request_restart(self):
+        """Ferme et relance la fenêtre principale (changement de langue)."""
+        self.restart = True
+        self.board.disconnect()
+        self._cancel_afters()
+        self.destroy()
+
     def _on_close(self):
         if self.acquisition.busy_recording():
             if not messagebox.askyesno("OpenSway", fr("Un enregistrement est en cours. Quitter ?")):
                 return
         self.board.disconnect()
+        self._cancel_afters()
         self.destroy()
 
 
 def main():
-    app = OpenSwayApp()
-    app.mainloop()
+    while True:
+        app = OpenSwayApp()
+        app.mainloop()
+        if not app.restart:
+            break

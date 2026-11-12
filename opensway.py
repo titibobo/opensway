@@ -14,10 +14,15 @@ except Exception:
 
 def main():
     from gui.app import OpenSwayApp
-    app = OpenSwayApp()
-    if pyi_splash:
-        pyi_splash.close()
-    app.mainloop()
+    first = True
+    while True:
+        app = OpenSwayApp()
+        if first and pyi_splash:
+            pyi_splash.close()
+        first = False
+        app.mainloop()
+        if not app.restart:          # relance après changement de langue
+            break
 
 
 if __name__ == "__main__":

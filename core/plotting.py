@@ -23,6 +23,39 @@ def plot_stabilogram(ax, t, x, y, filename):
     ax.legend(fontsize=8)
 
 
+# Nuances par essai : bleus pour ML, oranges pour AP (clair -> foncé)
+_ML_SHADES = ['#08519c', '#3182bd', '#6baed6', '#9ecae1', '#2171b5', '#4292c6']
+_AP_SHADES = ['#a63603', '#e6550d', '#fd8d3c', '#fdae6b', '#d94801', '#f16913']
+
+
+def plot_stabilograms(ax_ml, ax_ap, series_list, filename):
+    """
+    Stabilogrammes ML (haut, bleus) et AP (bas, oranges), un essai par nuance.
+    Bande grisée = ± 1 ET de position (moyenne des ET des essais) : amplitude
+    lisible sans moyenner des signaux qui ne sont pas synchronisés dans le temps.
+    """
+    n = len(series_list)
+    for ax, key, shades, name in ((ax_ml, 'x', _ML_SHADES, "ML"),
+                                  (ax_ap, 'y', _AP_SHADES, "AP")):
+        ax.clear()
+        sd = float(np.mean([np.std(s[key], ddof=1) for s in series_list]))
+        ax.axhspan(-sd, sd, color=shades[2], alpha=0.15, lw=0,
+                   label=f"± 1 {'ET' if get_language() == 'fr' else 'SD'}")
+        for k, s in enumerate(series_list):
+            lab = f"{tr('trial')} {k+1}" if n > 1 else name
+            ax.plot(s['t'], s[key], lw=0.9 if n > 1 else 1.0,
+                    color=shades[k % len(shades)], alpha=0.9, label=lab)
+        ax.axhline(0, color="0.6", lw=0.8)
+        ax.set_ylabel(f"{name} (cm)", fontsize=8)
+        ax.tick_params(axis='both', which='major', labelsize=7)
+        ax.grid(True, alpha=0.25)
+        ax.legend(fontsize=7, loc='upper right', ncol=min(n + 1, 4), framealpha=0.8, edgecolor='none')
+    title = tr('centered stabilograms') if n > 1 else tr('centered stabilogram')
+    ax_ml.set_title(f"{filename} - {title}" + (f" ({n} {tr('trials')})" if n > 1 else ""),
+                    fontsize=9, pad=5)
+    ax_ap.set_xlabel(tr("Time (s)"), fontsize=8)
+
+
 def plot_statokinesigram(ax, x_filt, y_filt, filename):
     ax.clear()
     
