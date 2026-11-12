@@ -11,7 +11,8 @@ from tkinter import ttk, messagebox
 
 from acquisition.reader import Reader
 from acquisition.simulator import SimulatedBoard
-from gui.common import VERSION
+from core.i18n import tr, fr, set_language
+from gui.common import VERSION, load_config
 
 
 class BoardManager:
@@ -53,10 +54,10 @@ class BoardManager:
                     dev = BalanceBoard()
                     dev.open()
                 self._start_reader(dev)
-                status, msg = "ok", f"{dev.name} : connexion établie."
+                status, msg = "ok", f"{fr(dev.name)} : {fr('connexion établie.')}"
             except ImportError:
-                status, msg = "error", ("Module 'hidapi' absent : "
-                                        "pip install hidapi (inutile avec le .exe).")
+                status, msg = "error", fr("Module 'hidapi' absent : "
+                                          "pip install hidapi (inutile avec le .exe).")
             except RuntimeError as e:
                 status, msg = "not_found", str(e)
             except Exception as e:
@@ -76,10 +77,10 @@ class BoardManager:
             self.app.post(lambda m=m: self.app.log(m))
 
         def work():
-            status, msg = "error", "Appairage échoué."
+            status, msg = "error", fr("Appairage échoué.")
             try:
                 if sys.platform != "win32":
-                    raise RuntimeError("Appairage automatique disponible sous Windows uniquement.")
+                    raise RuntimeError(fr("Appairage automatique disponible sous Windows uniquement."))
                 from acquisition.board import BalanceBoard, pair_windows
                 if pair_windows(log=log):
                     t_end = time.perf_counter() + 20
@@ -88,11 +89,11 @@ class BoardManager:
                             dev = BalanceBoard()
                             dev.open()
                             self._start_reader(dev)
-                            status, msg = "ok", "Wii Balance Board appairée et connectée."
+                            status, msg = "ok", fr("Wii Balance Board appairée et connectée.")
                             break
                         except RuntimeError:
                             if time.perf_counter() > t_end:
-                                msg = "Appairage fait, mais la planche n'apparaît pas."
+                                msg = fr("Appairage fait, mais la planche n'apparaît pas.")
                                 break
                             time.sleep(2)
             except Exception as e:
@@ -119,6 +120,7 @@ class BoardManager:
 class OpenSwayApp(tk.Tk):
     def __init__(self):
         super().__init__()
+        set_language(load_config().get("language", "fr"))
 
         self.ui_fixed = tkfont.Font(family='Courier New', size=8)
         self.option_add('*Font', self.ui_fixed)
@@ -144,8 +146,8 @@ class OpenSwayApp(tk.Tk):
         nb.pack(fill='both', expand=True)
         self.analysis    = AnalysisPanel(nb, self)
         self.acquisition = AcquisitionPanel(nb, self)
-        nb.add(self.acquisition, text="Acquisition")
-        nb.add(self.analysis,    text="Analyse")
+        nb.add(self.acquisition, text=tr("Acquisition"))
+        nb.add(self.analysis,    text=tr("Analysis"))
         self.notebook = nb
 
         self.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -171,7 +173,7 @@ class OpenSwayApp(tk.Tk):
 
     def _on_close(self):
         if self.acquisition.busy_recording():
-            if not messagebox.askyesno("OpenSway", "Un enregistrement est en cours. Quitter ?"):
+            if not messagebox.askyesno("OpenSway", fr("Un enregistrement est en cours. Quitter ?")):
                 return
         self.board.disconnect()
         self.destroy()

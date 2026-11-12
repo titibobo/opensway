@@ -14,6 +14,7 @@ from matplotlib.patches import Rectangle
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 from core.fileformat import write_recording
+from core.i18n import fr
 from gui.common import ToolTip, Blitter, VERSION
 
 BOARD_W, BOARD_H = 51.0, 31.0          # dimensions extérieures (cm), pour le dessin
@@ -24,8 +25,21 @@ EYES     = [("Yeux ouverts", "YO"), ("Yeux fermés", "YF")]
 SURFACES = [("Sol dur", "dur"), ("Mousse", "mousse")]
 
 
-def _safe(s: str) -> str:
-    return re.sub(r"[^A-Za-z0-9_-]+", "-", s.strip()) or "anonyme"
+def _safe(s: str, underscore: bool = True) -> str:
+    """Nom utilisable dans un chemin. Sans « _ » pour groupe / temps, car le
+    dossier « groupe_temps » est découpé sur le premier « _ » à l'analyse."""
+    keep = r"[^A-Za-z0-9+_-]+" if underscore else r"[^A-Za-z0-9+-]+"
+    return re.sub(keep, "-", s.strip()).strip("-")
+
+
+def next_trial_index(folder: str, subject: str) -> int:
+    """Premier n° d'essai libre pour ce sujet dans ce dossier (rien n'est écrasé)."""
+    pat = re.compile(rf"^{re.escape(subject)}_(\d+)\.csv$", re.IGNORECASE)
+    try:
+        nums = [int(m.group(1)) for f in os.listdir(folder) if (m := pat.match(f))]
+    except FileNotFoundError:
+        nums = []
+    return max(nums, default=0) + 1
 
 
 class AcquisitionPanel(ttk.Frame):
@@ -53,7 +67,7 @@ class AcquisitionPanel(ttk.Frame):
         LW = 16                              # largeur des libellés (alignement)
 
         # ---- Planche -------------------------------------------------------
-        frm = ttk.LabelFrame(left, text="Planche")
+        frm = ttk.LabelFrame(left, text=fr("Planche"))
         frm.grid(row=0, column=0, sticky='ew')
         frm.columnconfigure(1, weight=1)
 
@@ -62,70 +76,81 @@ class AcquisitionPanel(ttk.Frame):
         src.grid(row=0, column=0, columnspan=2, sticky='w', padx=4, pady=2)
         ttk.Radiobutton(src, text="Wii Balance Board", value="wbb",
                         variable=self.var_source).pack(side='left')
-        ttk.Radiobutton(src, text="Simulateur", value="sim",
+        ttk.Radiobutton(src, text=fr("Simulateur"), value="sim",
                         variable=self.var_source).pack(side='left', padx=(8, 0))
 
         btns = ttk.Frame(frm)
         btns.grid(row=1, column=0, columnspan=2, sticky='ew', padx=4, pady=2)
         btns.columnconfigure((0, 1, 2), weight=1, uniform='b')
-        self.btn_connect = ttk.Button(btns, text="Connecter", command=self.connect)
+        self.btn_connect = ttk.Button(btns, text=fr("Connecter"), command=self.connect)
         self.btn_connect.grid(row=0, column=0, sticky='ew', padx=(0, 2))
-        self.btn_tare = ttk.Button(btns, text="Tare", command=self.tare, state='disabled')
+        self.btn_tare = ttk.Button(btns, text=fr("Tare"), command=self.tare, state='disabled')
         self.btn_tare.grid(row=0, column=1, sticky='ew', padx=2)
-        self.btn_disc = ttk.Button(btns, text="Déconnecter", command=self.disconnect,
+        self.btn_disc = ttk.Button(btns, text=fr("Déconnecter"), command=self.disconnect,
                                    state='disabled')
         self.btn_disc.grid(row=0, column=2, sticky='ew', padx=(2, 0))
-        ToolTip(self.btn_tare, "Mise à zéro des 4 capteurs, planche VIDE.\n"
-                               "À refaire si la planche a été déplacée.")
+        ToolTip(self.btn_tare, fr("Mise à zéro des 4 capteurs, planche VIDE.\n"
+                                  "À refaire si la planche a été déplacée."))
 
-        self.var_status = tk.StringVar(value="Non connectée")
+        self.var_status = tk.StringVar(value=fr("Non connectée"))
         self.var_batt   = tk.StringVar(value="-")
         self.var_weight = tk.StringVar(value="-")
-        self.var_tare   = tk.StringVar(value="non faite")
+        self.var_tare   = tk.StringVar(value=fr("non faite"))
+        self._tare_done = False
         for i, (lab, var) in enumerate([("Statut", self.var_status),
                                         ("Batterie", self.var_batt),
                                         ("Charge", self.var_weight),
                                         ("Tare", self.var_tare)], start=2):
-            ttk.Label(frm, text=lab, width=LW).grid(row=i, column=0, sticky='w', padx=4, pady=1)
+            ttk.Label(frm, text=fr(lab), width=LW).grid(row=i, column=0, sticky='w', padx=4, pady=1)
             ttk.Label(frm, textvariable=var, width=22, anchor='w').grid(
                 row=i, column=1, sticky='w', padx=4, pady=1)
 
         # ---- Sujet & conditions -------------------------------------------
-        frm = ttk.LabelFrame(left, text="Sujet & conditions")
+        frm = ttk.LabelFrame(left, text=fr("Sujet & conditions"))
         frm.grid(row=1, column=0, sticky='ew', pady=(8, 0))
         self.var_subject = tk.StringVar()
+        self.var_group   = tk.StringVar()
+        self.var_time    = tk.StringVar()
         self.var_eyes    = tk.StringVar(value="YO")
         self.var_surface = tk.StringVar(value="dur")
         self.var_note    = tk.StringVar()
 
-        ttk.Label(frm, text="Sujet (code)", width=LW).grid(row=0, column=0, sticky='w', padx=4, pady=2)
-        e = ttk.Entry(frm, textvariable=self.var_subject, width=22)
-        e.grid(row=0, column=1, sticky='w', padx=4, pady=2)
-        ToolTip(e, "Code pseudonyme du sujet (ex. S012).\nÉviter nom / prénom : il figure "
-                   "dans le nom du fichier.")
+        entries = [("Sujet (code)", self.var_subject,
+                    "Code pseudonyme du sujet (ex. S012).\nÉviter nom / prénom : il figure "
+                    "dans le nom du fichier."),
+                   ("Groupe",       self.var_group,
+                    "Facultatif (ex. ttt, sim). Avec le temps, donne le dossier\n"
+                    "« groupe_temps », reconnu à l'analyse comme dans la v2.3."),
+                   ("Temps",        self.var_time,
+                    "Facultatif (ex. AV, AP, T0, T1).")]
+        for r, (lab, var, tip) in enumerate(entries):
+            ttk.Label(frm, text=fr(lab), width=LW).grid(row=r, column=0, sticky='w', padx=4, pady=2)
+            e = ttk.Entry(frm, textvariable=var, width=22)
+            e.grid(row=r, column=1, sticky='w', padx=4, pady=2)
+            ToolTip(e, fr(tip))
 
         for r, (lab, var, opts) in enumerate([("Yeux", self.var_eyes, EYES),
-                                              ("Surface", self.var_surface, SURFACES)], start=1):
-            ttk.Label(frm, text=lab, width=LW).grid(row=r, column=0, sticky='w', padx=4, pady=2)
+                                              ("Surface", self.var_surface, SURFACES)], start=3):
+            ttk.Label(frm, text=fr(lab), width=LW).grid(row=r, column=0, sticky='w', padx=4, pady=2)
             f = ttk.Frame(frm)
             f.grid(row=r, column=1, sticky='w', padx=4, pady=2)
             for j, (txt, val) in enumerate(opts):
-                ttk.Radiobutton(f, text=txt, value=val, variable=var,
+                ttk.Radiobutton(f, text=fr(txt), value=val, variable=var,
                                 command=self._sync_simulator).grid(row=0, column=j, sticky='w',
                                                                    padx=(0, 8))
 
-        ttk.Label(frm, text="Note", width=LW).grid(row=3, column=0, sticky='w', padx=4, pady=2)
-        ttk.Entry(frm, textvariable=self.var_note, width=22).grid(row=3, column=1, sticky='w',
+        ttk.Label(frm, text=fr("Note"), width=LW).grid(row=5, column=0, sticky='w', padx=4, pady=2)
+        ttk.Entry(frm, textvariable=self.var_note, width=22).grid(row=5, column=1, sticky='w',
                                                                   padx=4, pady=2)
 
         # ---- Protocole -----------------------------------------------------
-        frm = ttk.LabelFrame(left, text="Protocole")
+        frm = ttk.LabelFrame(left, text=fr("Protocole"))
         frm.grid(row=2, column=0, sticky='ew', pady=(8, 0))
-        self.var_dur    = tk.DoubleVar(value=30.0)
-        self.var_ntrial = tk.IntVar(value=1)
-        self.var_pause  = tk.DoubleVar(value=30.0)
+        self.var_dur    = tk.StringVar(value="60")
+        self.var_ntrial = tk.IntVar(value=3)
+        self.var_pause  = tk.StringVar(value="30")
         self.var_wait   = tk.BooleanVar(value=False)
-        self.var_cd     = tk.IntVar(value=3)
+        self.var_cd     = tk.StringVar(value="3")
 
         rows = [("Durée (s)",          ttk.Entry(frm, textvariable=self.var_dur, width=6)),
                 ("Nombre d'essais",    ttk.Spinbox(frm, from_=1, to=10, width=5,
@@ -133,16 +158,21 @@ class AcquisitionPanel(ttk.Frame):
                 ("Pause (s)",          ttk.Entry(frm, textvariable=self.var_pause, width=6)),
                 ("Décompte (s)",       ttk.Entry(frm, textvariable=self.var_cd, width=6))]
         for r, (lab, w) in enumerate(rows):
-            ttk.Label(frm, text=lab, width=LW).grid(row=r, column=0, sticky='w', padx=4, pady=2)
+            ttk.Label(frm, text=fr(lab), width=LW).grid(row=r, column=0, sticky='w', padx=4, pady=2)
             w.grid(row=r, column=1, sticky='w', padx=4, pady=2)
-        cb = ttk.Checkbutton(frm, text="Attendre ma validation entre essais",
+        cb = ttk.Checkbutton(frm, text=fr("Attendre ma validation entre essais"),
                              variable=self.var_wait)
         cb.grid(row=4, column=0, columnspan=2, sticky='w', padx=4, pady=2)
-        ToolTip(cb, "Si coché, l'essai suivant ne démarre qu'au clic sur « Essai suivant »\n"
-                    "(sinon il démarre automatiquement après la pause).")
+        ToolTip(cb, fr("Si coché, l'essai suivant ne démarre qu'au clic sur « Essai suivant »\n"
+                       "(sinon il démarre automatiquement après la pause)."))
+        ToolTip(rows[0][1], fr("60 s par défaut : au moins 60 s pour l'entropie d'échantillon\n"
+                               "(Montesinos et al., 2018) ; 90 s pour la fiabilité des\n"
+                               "paramètres classiques (Ruhe et al., 2010)."))
+        ToolTip(rows[1][1], fr("3 essais par défaut : moyenner 3 à 5 répétitions\n"
+                               "(Ruhe et al., 2010)."))
 
         # ---- Dossier -------------------------------------------------------
-        frm = ttk.LabelFrame(left, text="Dossier d'enregistrement")
+        frm = ttk.LabelFrame(left, text=fr("Dossier d'enregistrement"))
         frm.grid(row=3, column=0, sticky='ew', pady=(8, 0))
         frm.columnconfigure(0, weight=1)
         self.out_dir = str(Path.home() / "Documents" / "OpenSway")
@@ -156,23 +186,19 @@ class AcquisitionPanel(ttk.Frame):
         cmd = ttk.Frame(left)
         cmd.grid(row=4, column=0, sticky='ew', pady=(10, 0))
         cmd.columnconfigure((0, 1), weight=1, uniform='c')
-        self.btn_start = ttk.Button(cmd, text="▶ Démarrer", style='Big.TButton',
+        self.btn_start = ttk.Button(cmd, text="▶ " + fr("Démarrer"), style='Big.TButton',
                                     command=self.start_series)
         self.btn_start.grid(row=0, column=0, sticky='ew', padx=(0, 2))
-        self.btn_stop = ttk.Button(cmd, text="■ Arrêter", style='Big.TButton',
+        self.btn_stop = ttk.Button(cmd, text="■ " + fr("Arrêter"), style='Big.TButton',
                                    command=self.stop_series, state='disabled')
         self.btn_stop.grid(row=0, column=1, sticky='ew', padx=(2, 0))
-        self.btn_next = ttk.Button(cmd, text="Essai suivant ▶", command=self.next_trial,
+        self.btn_next = ttk.Button(cmd, text=fr("Essai suivant") + " ▶", command=self.next_trial,
                                    state='disabled')
         self.btn_next.grid(row=1, column=0, columnspan=2, sticky='ew', pady=(4, 0))
 
         self.var_progress = tk.StringVar(value="")
         ttk.Label(left, textvariable=self.var_progress, anchor='w').grid(
             row=5, column=0, sticky='ew', pady=(6, 0))
-
-        ttk.Separator(left, orient='horizontal').grid(row=6, column=0, sticky='ew', pady=8)
-        ttk.Button(left, text="Mode démo pédagogique…", command=self.open_demo).grid(
-            row=7, column=0, sticky='ew')
 
         # ---- Tracés temps réel --------------------------------------------
         right = ttk.Frame(self)
@@ -203,10 +229,10 @@ class AcquisitionPanel(ttk.Frame):
         ax.set_xlim(-BOARD_W / 2 - 1, BOARD_W / 2 + 1)
         ax.set_ylim(-BOARD_H / 2 - 1, BOARD_H / 2 + 1)
         ax.set_aspect('equal', adjustable='box')
-        ax.set_xlabel("ML (cm)   gauche ← → droite", fontsize=8)
-        ax.set_ylabel("AP (cm)   arrière ← → avant", fontsize=8)
+        ax.set_xlabel(fr("ML (cm)   gauche ← → droite"), fontsize=8)
+        ax.set_ylabel(fr("AP (cm)   arrière ← → avant"), fontsize=8)
         ax.tick_params(labelsize=7)
-        ax.set_title("Centre de pression (temps réel)", fontsize=9)
+        ax.set_title(fr("Centre de pression (temps réel)"), fontsize=9)
         self.txt_big = ax.text(0, 0, "", ha='center', va='center', fontsize=40,
                                color='#e4572e', alpha=0.85, fontweight='bold')
 
@@ -216,8 +242,8 @@ class AcquisitionPanel(ttk.Frame):
             a.grid(True, alpha=0.25)
         self.ln_ml, = self.ax_ml.plot([], [], lw=1, color='#0e5780')
         self.ln_ap, = self.ax_ap.plot([], [], lw=1, color='#ff8d4d')
-        self.ax_ml.set_title("10 dernières secondes", fontsize=9)
-        self.ax_ap.set_xlabel("Temps (s)", fontsize=8)
+        self.ax_ml.set_title(fr("10 dernières secondes"), fontsize=9)
+        self.ax_ap.set_xlabel(fr("Temps (s)"), fontsize=8)
         self.fig.subplots_adjust(left=0.08, right=0.98, bottom=0.10, top=0.93)
 
     @staticmethod
@@ -230,7 +256,7 @@ class AcquisitionPanel(ttk.Frame):
     # ============================================================ CONNEXION
     def connect(self):
         self.btn_connect.configure(state='disabled')
-        self.var_status.set("Connexion…")
+        self.var_status.set(fr("Connexion…"))
         self.app.board.connect(self.var_source.get(), self._on_connect)
 
     def _on_connect(self, status, msg):
@@ -239,35 +265,37 @@ class AcquisitionPanel(ttk.Frame):
             return
         if status == "not_found" and self.var_source.get() == "wbb":
             if messagebox.askokcancel(
-                    "Planche non trouvée",
-                    "La planche n'est pas connectée.\n\n"
-                    "Appuie sur le bouton rouge SYNC (sous le capot des piles) :\n"
-                    "la LED clignote. Puis clique sur OK.\n\n"
-                    "(Si la planche a déjà été appairée sur ce PC, le bouton POWER\n"
-                    "peut suffire : appuie dessus puis clique sur Annuler et réessaie.)"):
-                self.var_status.set("Appairage…")
-                self.app.log("[BT] Appairage en cours (20-40 s)…")
+                    fr("Planche non trouvée"),
+                    fr("La planche n'est pas connectée.\n\n"
+                       "Appuie sur le bouton rouge SYNC (sous le capot des piles) :\n"
+                       "la LED clignote. Puis clique sur OK.\n\n"
+                       "(Si la planche a déjà été appairée sur ce PC, le bouton POWER\n"
+                       "peut suffire : appuie dessus puis clique sur Annuler et réessaie.)")):
+                self.var_status.set(fr("Appairage…"))
+                self.app.log(fr("[BT] Appairage en cours (20-40 s)…"))
                 self.app.board.pair_and_connect(self._on_connect_after_pair)
                 return
-        self.var_status.set("Non connectée")
+        self.var_status.set(fr("Non connectée"))
         self.btn_connect.configure(state='normal')
         self.app.log(f"[Connexion] {msg}")
         if status == "error":
-            messagebox.showerror("Connexion", msg)
+            messagebox.showerror(fr("Connexion"), msg)
 
     def _on_connect_after_pair(self, status, msg):
         if status == "ok":
             self._connected_ui(msg)
         else:
-            self.var_status.set("Non connectée")
+            self.var_status.set(fr("Non connectée"))
             self.btn_connect.configure(state='normal')
             self.app.log(f"[Connexion] {msg}")
-            messagebox.showwarning("Connexion", msg + "\n\nRéessaie : bouton SYNC puis Connecter.")
+            messagebox.showwarning(fr("Connexion"),
+                                   msg + "\n\n" + fr("Réessaie : bouton SYNC puis Connecter."))
 
     def _connected_ui(self, msg):
         dev = self.app.board.device
-        self.var_status.set(dev.name)
-        self.var_tare.set("non faite")
+        self.var_status.set(fr(dev.name))
+        self.var_tare.set(fr("non faite"))
+        self._tare_done = False
         self.btn_connect.configure(state='disabled')
         self.btn_disc.configure(state='normal')
         self.btn_tare.configure(state='normal')
@@ -275,15 +303,15 @@ class AcquisitionPanel(ttk.Frame):
         self._sync_simulator()
         self.app.log(f"[Connexion] {msg}")
         if dev.cal:
-            self.app.log(f"[Connexion] Calibration usine : {dev.cal}")
-        if messagebox.askyesno("Tare", "Faire la tare maintenant ?\n(planche vide)"):
+            self.app.log(f"[Connexion] {fr('Calibration usine')} : {dev.cal}")
+        if messagebox.askyesno(fr("Tare"), fr("Faire la tare maintenant ?\n(planche vide)")):
             self.tare()
 
     def disconnect(self):
         if self.busy_recording():
             return
         self.app.board.disconnect()
-        self.var_status.set("Non connectée")
+        self.var_status.set(fr("Non connectée"))
         self.var_batt.set("-")
         self.var_weight.set("-")
         self.btn_connect.configure(state='normal')
@@ -302,18 +330,19 @@ class AcquisitionPanel(ttk.Frame):
         r = self.app.board.reader
         if r is None or self.busy_recording():
             return
-        if not messagebox.askokcancel("Tare", "Personne sur la planche ?\n"
-                                              "Clique sur OK, la tare dure 2 s."):
+        if not messagebox.askokcancel(fr("Tare"), fr("Personne sur la planche ?\n"
+                                                    "Clique sur OK, la tare dure 2 s.")):
             return
         self.btn_tare.configure(state='disabled')
         r.start_tare()
-        self.var_tare.set("en cours…")
+        self.var_tare.set(fr("en cours…"))
 
         def done():
             n = r.finish_tare()
             self.btn_tare.configure(state='normal')
-            self.var_tare.set(f"faite ({datetime.now():%H:%M})" if n else "échec")
-            self.app.log(f"[Tare] {n} mesures, offsets kg (TL TR BL BR) = "
+            self._tare_done = bool(n)
+            self.var_tare.set(f"{fr('faite')} ({datetime.now():%H:%M})" if n else fr("échec"))
+            self.app.log(f"[Tare] {n} {fr('mesures')}, offsets kg (TL TR BL BR) = "
                          + " ".join(f"{v:+.3f}" for v in r.tare))
         self.after(2000, done)
 
@@ -322,7 +351,7 @@ class AcquisitionPanel(ttk.Frame):
         return self.state in ("countdown", "recording", "pause", "wait")
 
     def choose_dir(self):
-        d = filedialog.askdirectory(initialdir=self.out_dir, title="Dossier d'enregistrement")
+        d = filedialog.askdirectory(initialdir=self.out_dir, title=fr("Dossier d'enregistrement"))
         if d:
             self.out_dir = d
             self.var_dir.set(self._short(d))
@@ -330,46 +359,55 @@ class AcquisitionPanel(ttk.Frame):
     def start_series(self):
         r = self.app.board.reader
         if r is None:
-            messagebox.showinfo("Démarrer", "Connecte d'abord la planche (ou le simulateur).")
+            messagebox.showinfo(fr("Démarrer"), fr("Connecte d'abord la planche (ou le simulateur)."))
             return
         subj = self.var_subject.get().strip()
         if not subj:
-            messagebox.showinfo("Démarrer", "Renseigne le code du sujet.")
+            messagebox.showinfo(fr("Démarrer"), fr("Renseigne le code du sujet."))
             return
         try:
-            self.dur    = float(self.var_dur.get())
+            self.dur    = float(str(self.var_dur.get()).replace(',', '.'))
             self.ntrial = int(self.var_ntrial.get())
-            self.pause  = float(self.var_pause.get())
-            self.cd     = int(self.var_cd.get())
+            self.pause  = float(str(self.var_pause.get()).replace(',', '.'))
+            self.cd     = int(float(self.var_cd.get()))
             assert self.dur >= 5 and self.ntrial >= 1 and self.pause >= 0 and self.cd >= 0
         except Exception:
-            messagebox.showerror("Démarrer", "Paramètres du protocole invalides "
-                                             "(durée ≥ 5 s, essais ≥ 1).")
+            messagebox.showerror(fr("Démarrer"), fr("Paramètres du protocole invalides "
+                                                    "(durée ≥ 5 s, essais ≥ 1)."))
             return
-        if self.var_tare.get() == "non faite":
-            if not messagebox.askyesno("Démarrer", "La tare n'a pas été faite. Continuer ?"):
+        if not self._tare_done:
+            if not messagebox.askyesno(fr("Démarrer"), fr("La tare n'a pas été faite. Continuer ?")):
                 return
         if self._current_weight() < MIN_WEIGHT_KG:
-            if not messagebox.askyesno("Démarrer", "Personne ne semble être sur la planche.\n"
-                                                   "Démarrer quand même ?"):
+            if not messagebox.askyesno(fr("Démarrer"), fr("Personne ne semble être sur la planche.\n"
+                                                          "Démarrer quand même ?")):
                 return
+        # Rangement (convention v2.3) : <dossier>/<groupe_temps>/<YO-dur>/<sujet>_<n>.csv
+        grp, tps = _safe(self.var_group.get(), False), _safe(self.var_time.get(), False)
+        parts = [self.out_dir]
+        if grp or tps:
+            parts.append(f"{grp}_{tps}")
+        parts.append(f"{self.var_eyes.get()}-{self.var_surface.get()}")
+        self.series_dir = os.path.join(*parts)
+        self.subject    = _safe(subj) or "S"
+        self.first_idx  = next_trial_index(self.series_dir, self.subject)
         self.series_id  = datetime.now().strftime("%Y%m%d-%H%M%S")
-        self.series_dir = os.path.join(self.out_dir, _safe(subj))
         self.trial = 1
         self._set_state("countdown")
         self.btn_start.configure(state='disabled')
         self.btn_stop.configure(state='normal')
         self.btn_disc.configure(state='disabled')
         self.btn_tare.configure(state='disabled')
-        self.app.log(f"[Série] {subj} {self.var_eyes.get()} {self.var_surface.get()} : "
-                     f"{self.ntrial} × {self.dur:g} s")
+        self.app.log(f"[{fr('Série')}] {subj} {grp} {tps} {self.var_eyes.get()} "
+                     f"{self.var_surface.get()} : {self.ntrial} × {self.dur:g} s")
 
     def stop_series(self):
         r = self.app.board.reader
         if self.state == "recording" and r is not None:
             r.stop_recording()
-            self.app.log(f"[Série] Essai {self.trial} interrompu (non enregistré).")
-        self._end_series("Série arrêtée.")
+            self.app.log(f"[{fr('Série')}] {fr('Essai')} {self.trial} "
+                         f"{fr('interrompu (non enregistré).')}")
+        self._end_series(fr("Série arrêtée."))
 
     def next_trial(self):
         if self.state == "wait":
@@ -396,22 +434,23 @@ class AcquisitionPanel(ttk.Frame):
         rows = r.stop_recording()
         self.app.bell()
         if len(rows) < 50:
-            self.app.log("[Série] Essai vide ou trop court : vérifier la connexion.")
-            self._end_series("Erreur : essai vide.")
+            self.app.log(fr("[Série] Essai vide ou trop court : vérifier la connexion."))
+            self._end_series(fr("Erreur : essai vide."))
             return
-        subj = _safe(self.var_subject.get())
         eyes, surf = self.var_eyes.get(), self.var_surface.get()
-        fname = f"{subj}_{eyes}_{surf}_E{self.trial:02d}_{self.series_id}.csv"
-        path = os.path.join(self.series_dir, fname)
+        idx   = self.first_idx + self.trial - 1
+        path  = os.path.join(self.series_dir, f"{self.subject}_{idx}.csv")
         dev = self.app.board.device
         meta = {
             "logiciel": f"OpenSway {VERSION}",
             "source":   dev.name,
-            "sujet":    self.var_subject.get().strip(),
+            "sujet":    self.subject,
+            "groupe":   _safe(self.var_group.get(), False),
+            "temps":    _safe(self.var_time.get(), False),
             "yeux":     eyes,
             "surface":  surf,
             "serie":    self.series_id,
-            "essai":    self.trial,
+            "essai":    idx,
             "n_essais": self.ntrial,
             "duree_s":  f"{self.dur:g}",
             "note":     self.var_note.get().strip(),
@@ -422,16 +461,17 @@ class AcquisitionPanel(ttk.Frame):
         try:
             write_recording(path, rows, meta)
         except Exception as e:
-            messagebox.showerror("Enregistrement", f"Impossible d'écrire le fichier :\n{e}")
-            self._end_series("Erreur d'écriture.")
+            msg = fr("Impossible d'écrire le fichier :")
+            messagebox.showerror(fr("Enregistrement"), f"{msg}\n{e}")
+            self._end_series(fr("Erreur d'écriture."))
             return
         fs = (len(rows) - 1) / (rows[-1, 0] / 1000) if rows[-1, 0] > 0 else 0
-        self.app.log(f"[Essai {self.trial}/{self.ntrial}] {len(rows)} mesures "
+        self.app.log(f"[{fr('Essai')} {self.trial}/{self.ntrial}] {len(rows)} {fr('mesures')} "
                      f"({fs:.0f}/s), {rows[:, 7].mean():.1f} kg -> {path}")
         self.app.analysis.add_path(path, process=True)
 
         if self.trial >= self.ntrial:
-            self._end_series(f"Série terminée : {self.ntrial} essai(s) dans {self.series_dir}")
+            self._end_series(f"{fr('Série terminée')} : {self.ntrial} × -> {self.series_dir}")
             return
         self.trial += 1
         self._set_state("wait" if self.var_wait.get() else "pause")
@@ -456,41 +496,43 @@ class AcquisitionPanel(ttk.Frame):
         r = board.reader
         if board.device is not None and r is not None and not r.is_alive():
             err = r.error
-            self.app.log(f"[Connexion] Planche perdue : {err}")
+            self.app.log(f"[Connexion] {fr('Planche perdue')} : {err}")
             if self.state == "recording":
                 r.stop_recording()
             board.disconnect()
             self.disconnect()
-            self._end_series("Connexion perdue.")
-            messagebox.showwarning("Connexion", "La planche s'est déconnectée.\n"
-                                                "Vérifie les piles puis reconnecte.")
+            self._end_series(fr("Connexion perdue."))
+            messagebox.showwarning(fr("Connexion"), fr("La planche s'est déconnectée.\n"
+                                                       "Vérifie les piles puis reconnecte."))
             return
 
         el = time.monotonic() - self.t_state
         if self.state == "countdown":
             rem = self.cd - el
             self.txt_big.set_text(str(int(np.ceil(rem))) if rem > 0 else "")
-            self.var_progress.set(f"Essai {self.trial}/{self.ntrial} : départ dans "
-                                  f"{max(rem, 0):.0f} s")
+            self.var_progress.set(f"{fr('Essai')} {self.trial}/{self.ntrial} : "
+                                  f"{fr('départ dans')} {max(rem, 0):.0f} s")
             if rem <= 0:
                 r.start_recording()
                 self.app.bell()
                 self._set_state("recording")
         elif self.state == "recording":
             t = r.recording_elapsed()
-            self.var_progress.set(f"Essai {self.trial}/{self.ntrial} : "
+            self.var_progress.set(f"{fr('Essai')} {self.trial}/{self.ntrial} : "
                                   f"{t:5.1f} / {self.dur:g} s")
             if t >= self.dur:
                 self._finish_trial()
         elif self.state == "pause":
             rem = self.pause - el
             self.txt_big.set_text("")
-            self.var_progress.set(f"Pause : essai {self.trial}/{self.ntrial} dans {rem:.0f} s")
+            self.var_progress.set(f"Pause : {fr('essai')} {self.trial}/{self.ntrial} "
+                                  f"{fr('dans')} {rem:.0f} s")
             if rem <= 0:
                 self._set_state("countdown")
         elif self.state == "wait":
-            self.var_progress.set(f"Prêt pour l'essai {self.trial}/{self.ntrial} : "
-                                  f"clique sur « Essai suivant »")
+            ready = fr("Prêt pour l'essai")
+            self.var_progress.set(f"{ready} {self.trial}/{self.ntrial} : "
+                                  f"{fr('clique sur « Essai suivant »')}")
 
     def _update_plots(self):
         r = self.app.board.reader
@@ -542,11 +584,3 @@ class AcquisitionPanel(ttk.Frame):
             self.blit.full_redraw()
         else:
             self.blit.update()
-
-    # ================================================================= DÉMO
-    def open_demo(self):
-        from gui.demo import DemoWindow
-        if getattr(self, "_demo", None) is not None and self._demo.winfo_exists():
-            self._demo.lift()
-            return
-        self._demo = DemoWindow(self.app)

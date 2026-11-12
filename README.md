@@ -20,16 +20,19 @@ Le **simulateur** permet de préparer un TP ou de découvrir le logiciel sans pl
 ## Fonctions
 
 - **Acquisition** : appairage Bluetooth automatique (Windows), tare, CoP en temps réel,
-  décompte et bips de début/fin, séries de *n* essais avec pause ou validation manuelle.
-- **Conditions** : yeux ouverts/fermés (YO/YF), sol dur/mousse, note libre — inscrites dans
-  le nom et l'en-tête du fichier.
-- **Analyse** : descripteurs positionnels, dynamiques, fréquentiels et stochastiques
-  (Quijoux et al., 2021), rapport PDF, export Excel.
-- **Moyennage** (optionnel, à l'export Excel) : moyennes et écarts-types par sujet × yeux ×
-  surface, quotient de Romberg (YF/YO × 100).
-- **Mode démo pédagogique** : affichage grand format, traînée réglable, mesures A/B superposées
-  et comparées.
-- Lit aussi les anciens fichiers **BrainBLoX** (axe AP redressé comme dans BrainBloX Analysis v2.0).
+  décompte et bips, séries d'essais (par défaut **3 × 60 s** : ≥ 60 s pour la SampEn,
+  Montesinos et al. 2018 ; moyenne de 3 à 5 essais, Ruhe et al. 2010).
+- **Rangement** (convention v2.3) : `<dossier>/<groupe_temps>/<YO-dur>/<sujet>_<n>.csv`,
+  numérotation reprise à la suite des essais existants (rien n'est écrasé).
+- **Analyse** (BrainBloX Analysis v2.3) : descripteurs positionnels, dynamiques, spectraux,
+  stochastiques (SDA, temps critiques par axe) et non linéaires (SampEn, DFA, RQA) ;
+  import par fichiers ou dossiers avec reconnaissance sujet / essai / groupe / temps / condition ;
+  vue « Sujets » (moyenne ± ET) ; réglages avancés ; rapports PDF ; export Excel
+  *Means / Trials / Settings* (colonnes en anglais).
+- **Comparaison** (fenêtre séparée) : 2 à 6 essais ou moyennes, statokinésigrammes superposés,
+  diagramme d'un descripteur, tableau avec écart et rapport au premier élément.
+- **Interface en français**, anglais au choix (Réglages avancés → Interface).
+- Lit aussi les anciens fichiers **BrainBLoX** (axe AP redressé comme dans la v2.3).
 
 ## Format de fichier OpenSway v1
 
@@ -48,14 +51,16 @@ En-tête `# clé : valeur`, puis 8 colonnes séparées par des espaces, **donné
 
 ## Pré-traitement
 
-- Ré-échantillonnage **SWARII** à 25 Hz, fenêtre 0,25 s (Audiffren & Contal, 2016) —
+- Ré-échantillonnage **SWARII** à 25 Hz (par défaut), fenêtre 0,25 s (Audiffren & Contal, 2016) —
   la Wii Balance Board échantillonne de façon irrégulière (~60-65 mesures distinctes/s).
   L'interpolation linéaire de la v2.0 reste disponible (paramètre *Resampling*) ; elle redonne
   exactement les résultats de BrainBloX Analysis v2.0.
 - Butterworth passe-bas d'ordre 4, 10 Hz, sans déphasage.
 
-⚠️ SWARII modifie surtout les descripteurs de vitesse et de longueur de trajet (−10 à −15 % sur
-les fichiers d'exemple) : ne comparer que des données traitées avec la même méthode.
+⚠️ SWARII modifie les résultats par rapport à l'interpolation linéaire de la v2.3 (fichiers
+d'exemple BrainBLoX) : vitesses et longueurs de trajet −9 à −15 %, aire d'ellipse −4 à −7 %,
+**SampEn sur incréments −50 à −55 %**. Ne comparer que des données traitées avec la même
+méthode (elle est inscrite dans la feuille *Settings* de l'export).
 
 ## Références
 
@@ -74,5 +79,10 @@ python opensway.py
 ```
 
 `acquisition/` (planche, simulateur, lecture en tâche de fond) · `core/` (format, SWARII,
-analyses) · `gui/` (interface Tkinter) · `tests/`.
+analyses v2.3, traductions) · `gui/` (interface Tkinter) · `tests/`.
 Chaque push sur `main` compile `OpenSway.exe` (GitHub Actions) ; un tag `vX.Y` publie une Release.
+
+- Montesinos L. et al. (2018). On the use of approximate entropy and sample entropy with
+  centre of pressure time-series. *J NeuroEng Rehabil* 15:116. doi:10.1186/s12984-018-0465-9
+- Ruhe A., Fejer R., Walker B. (2010). The test-retest reliability of centre of pressure measures
+  in bipedal static task conditions – a systematic review. *Gait & Posture* 32(4):436-445.

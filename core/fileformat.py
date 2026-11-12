@@ -26,8 +26,8 @@ AXES_STANDARD  = "ML+ = droite, AP+ = avant"
 COLUMNS        = "t_ms TL_kg TR_kg BL_kg BR_kg cop_ml_cm cop_ap_cm total_kg"
 
 # Ordre d'écriture des métadonnées (les autres clés suivent)
-META_ORDER = ["format", "logiciel", "date", "source", "sujet", "yeux", "surface",
-              "serie", "essai", "n_essais", "duree_s", "note", "axes",
+META_ORDER = ["format", "logiciel", "date", "source", "sujet", "groupe", "temps",
+              "yeux", "surface", "serie", "essai", "n_essais", "duree_s", "note", "axes",
               "tare_kg", "calibration", "colonnes"]
 
 
@@ -78,6 +78,11 @@ def _read_header(path: str) -> dict:
                 k, v = body.split(":", 1)
                 meta[k.strip().lower()] = v.strip()
     return meta
+
+
+def read_header(path: str) -> dict:
+    """Métadonnées d'un fichier OpenSway ({} pour un fichier BrainBLoX)."""
+    return _read_header(path)
 
 
 def _axis_signs(axes: str) -> tuple[float, float]:

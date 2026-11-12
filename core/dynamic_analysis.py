@@ -114,11 +114,12 @@ def _advanced_calc(x: np.ndarray, y: np.ndarray, vx:np.ndarray, vy:np.ndarray,
     R = np.sqrt(x**2 + y**2)
     T = (len(x)-1) * dt
 
-    # VFY (n.u., sometimes refered to in cm²/s)
+    # VFY (cm.s⁻², Quijoux et al.): var(velocity norm) / mean AP position
+    #   NB: depends on the (non-centered) AP position of the feet on the board
     mean_AP           = float(np.mean(y_filt))
-    vy_unc            = np.diff(y_filt) / dt
-    var_vy_unc        = float(np.var(vy_unc, ddof=1))
-    vfy               = var_vy_unc / mean_AP
+    v_norm            = np.sqrt(vx**2 + vy**2)
+    var_v_norm        = float(np.var(v_norm, ddof=0))
+    vfy               = var_v_norm / mean_AP if mean_AP != 0 else np.nan
 
     # Sway area per second (cm²/s)
     areas             = 0.5 * np.abs(x[:-1] * y[1:] - x[1:] * y[:-1])
@@ -144,6 +145,17 @@ def _advanced_calc(x: np.ndarray, y: np.ndarray, vx:np.ndarray, vy:np.ndarray,
 
 
     return vfy, sway_area_s, ML_phase_plane, AP_phase_plane, mean_peak_s, mean_SD_peak_dist
+
+## Fractal dimension (Quijoux et al., 3.3.7)
+def _fractal_dim(N: int, GLOBAL_length: float, ellipse_area: float):
+
+    # d = diameter of the circle of same area as the 95% ellipse (cm)
+    d  = np.sqrt(4.0 * ellipse_area / np.pi) if ellipse_area > 0 else np.nan
+
+    # FD = log(N) / log(N.d/L)   (n.u.)
+    fd = np.log(N) / np.log(N * d / GLOBAL_length) if GLOBAL_length > 0 else np.nan
+
+    return float(fd)
 
 
 ## MAIN FUNCTION: Dynamic metrics
@@ -188,6 +200,8 @@ def dynamic_metrics(x_c: np.ndarray, y_c: np.ndarray, y_filt: np.ndarray,
     vfy, sway_area_s, ML_phase_plane, AP_phase_plane, \
         mean_peak_s, mean_SD_peak_dist = _advanced_calc(x, y, vx, vy, y_filt, dt)
 
+    fractal_dim = _fractal_dim(len(x), GLOBAL_length, ellipse_area)
+
     return {
         # Duration-dependant metrics
         'dyn_length_ML':          round(ML_length,2),
@@ -212,7 +226,7 @@ def dynamic_metrics(x_c: np.ndarray, y_c: np.ndarray, y_filt: np.ndarray,
         'dyn_swayAreaPerS':       round(sway_area_s,3),
         'dyn_phasePlane_ML':      round(ML_phase_plane,3),
         'dyn_phasePlane_AP':      round(AP_phase_plane,3),
-        # 'fractal_dim': ,
+        'dyn_fractalDim':         round(fractal_dim,3),
         'dyn_mppPos_ML':          round(ML_mpp_pos,2),
         'dyn_mppNeg_ML':          round(ML_mpp_neg,2),
         'dyn_mppAbs_ML':          round(ML_mpp_abs,2),

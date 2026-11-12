@@ -37,7 +37,7 @@ def test_brainblox_examples_still_analysed():
     for f in EXAMPLES:
         df, series = run_pipeline(f, Params())
         r = df.iloc[0]
-        assert r["format"] == "brainblox"
+        assert read_recording(f).source_format == "brainblox"
         assert r["pos_ellipse95_area"] > 0
         assert len(series["t"]) > 100
 
@@ -53,3 +53,21 @@ def test_opensway_roundtrip_and_axes(tmp_path):
     # même convention interne : pas de double inversion
     assert np.allclose(rec2.ap, rec.ap, atol=1e-3)
     assert np.allclose(rec2.ml, rec.ml, atol=1e-3)
+
+
+def test_linear_mode_matches_v23_convention():
+    # mode linéaire : AP inversé pour BrainBLoX, comme la v2.3
+    p = Params()
+    p.resampling = "linear"
+    df, _ = run_pipeline(EXAMPLES[0], p)
+    assert "nl_sampEn_AP" in df.columns and "stc_critTime_AP" in df.columns
+
+
+def test_design_names_and_folders():
+    from core.design import parse_name, folder_factors, folder_condition, export_name
+    assert parse_name("x/ttt_AV/YF-mousse/S012_3.csv") == ("S012", "3")
+    assert parse_name("x/P1_n°2.csv") == ("P1", "2")
+    assert folder_factors("x/ttt_AV/YF-mousse/S012_3.csv") == ("ttt", "AV")
+    assert folder_factors("x/sim+dt_AV/P1_n°2.csv") == ("sim+dt", "AV")
+    assert folder_condition("x/ttt_AV/YF-mousse/S012_3.csv") == ("YF", "mousse")
+    assert export_name("Groupe") == "group" and export_name("Time") == "time"

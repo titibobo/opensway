@@ -1,10 +1,56 @@
 """Éléments partagés de l'interface."""
+import json
+import os
 import sys
 from pathlib import Path
 
 import tkinter as tk
 
-VERSION = "1.0"
+VERSION = "1.1"
+
+
+# -----------------------------------------------------------------------------
+# Réglages mémorisés (langue…) : %APPDATA%/OpenSway/config.json ou ~/.opensway/
+# -----------------------------------------------------------------------------
+def _config_path() -> Path:
+    base = os.environ.get("APPDATA")
+    return (Path(base) / "OpenSway" if base else Path.home() / ".opensway") / "config.json"
+
+
+def load_config() -> dict:
+    try:
+        return json.loads(_config_path().read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def save_config(**values) -> None:
+    cfg = load_config()
+    cfg.update(values)
+    try:
+        p = _config_path()
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def center_window(win, parent=None) -> None:
+    """Place une fenêtre secondaire au centre de sa fenêtre parente
+    (et non dans le coin supérieur gauche de l'écran)."""
+    win.withdraw()
+    win.update_idletasks()
+    w, h = win.winfo_reqwidth(), win.winfo_reqheight()
+    if parent is not None and parent.winfo_ismapped():
+        px, py = parent.winfo_rootx(), parent.winfo_rooty()
+        pw, ph = parent.winfo_width(), parent.winfo_height()
+    else:
+        px, py = 0, 0
+        pw, ph = win.winfo_screenwidth(), win.winfo_screenheight()
+    x = max(0, px + (pw - w) // 2)
+    y = max(0, py + (ph - h) // 3)
+    win.geometry(f"+{x}+{y}")
+    win.deiconify()
 
 
 def resource_path(*parts: str) -> str:

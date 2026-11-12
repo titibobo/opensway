@@ -5,11 +5,15 @@ from .params import Params
 
 
 
-def _sda_for_signal(sig: np.ndarray, fs: float) -> Dict[str, float]:
+def sda_fit(sig: np.ndarray, fs: float, p: Params):
+    """
+    Returns the diffusion curve (dt, MSD) and the short/long-term
+    log-log fits (slope a, intercept b): dt_all, msd, (a_s, b_s), (a_l, b_l)
+    """
     N = len(sig)
 
-    # MSD(tau)
-    max_lag = int(min(N // 4, fs * 5))  # jusqu'à ≈5 s
+    # MSD(tau), per axis, for 1/fs <= tau <= T/3 (Quijoux et al., Def. 5)
+    max_lag = int(N // 3)
     taus    = np.arange(1, max_lag + 1)
     msd     = np.empty_like(taus, dtype=float)
 
@@ -17,32 +21,50 @@ def _sda_for_signal(sig: np.ndarray, fs: float) -> Dict[str, float]:
         d      = sig[tau:] - sig[:-tau]
         msd[k] = np.mean(d**2)
 
+    dt_all = taus / fs
+    valid  = np.isfinite(msd) & (msd > 0)
+
     def _fit_segment(tau_mask):
-        mask = tau_mask & np.isfinite(msd) & (msd > 0)
-        if np.sum(mask) < 2:
-            return np.nan, np.nan
-        dt = taus[mask] / fs
-        X  = np.log(dt)
+        mask = tau_mask & valid
+        if np.sum(mask) < 3:
+            return np.nan, np.nan, np.inf
+        X  = np.log(dt_all[mask])
         Y  = np.log(msd[mask])
         a, b = np.polyfit(X, Y, 1)    # log(MSD) ~ a log(t) + b
-        H = a / 2.0
-        D = np.exp(b)                 # MSD ≈ D t^(2H)
-        return float(D), float(H)
+        sse  = float(np.sum((Y - (a*X + b))**2))
+        return float(a), float(b), sse
 
-    # short-term ≤ 1 s, long-term ≥ 1.5 s (exemple Quijoux-like)
-    short_mask = (taus / fs) <= 1.0
-    long_mask  = (taus / fs) >= 1.5
+    # Breakpoint search inside [sda_tmin ; sda_tmax] s:
+    #   short-term fit on [1/fs ; tc], long-term fit on [tc ; T/3],
+    #   tc chosen to minimise the total squared error of both log-log fits
+    cand   = dt_all[(dt_all >= p.sda_tmin) & (dt_all <= p.sda_tmax)]
+    best   = (np.inf, np.nan, np.nan, np.nan, np.nan)
 
-    D_short, H_short = _fit_segment(short_mask)
-    D_long,  H_long  = _fit_segment(long_mask)
+    for tc in cand:
+        a_s, b_s, sse_s = _fit_segment(dt_all <= tc)
+        a_l, b_l, sse_l = _fit_segment(dt_all >= tc)
+        if sse_s + sse_l < best[0]:
+            best = (sse_s + sse_l, a_s, b_s, a_l, b_l)
 
+    _, a_s, b_s, a_l, b_l = best
+
+    return dt_all, msd, (a_s, b_s), (a_l, b_l)
+
+
+def _sda_for_signal(sig: np.ndarray, fs: float, p: Params) -> Dict[str, float]:
+
+    dt_all, msd, (a_s, b_s), (a_l, b_l) = sda_fit(sig, fs, p)
+
+    # MSD ≈ D t^(2H)  ->  H = slope/2 ; D = exp(intercept)   (cm².s^-2H)
+    H_short, D_short = a_s / 2.0, np.exp(b_s)
+    H_long,  D_long  = a_l / 2.0, np.exp(b_l)
+
+    # Critical point = intersection of both log-log fits, bounded to [1/fs ; T/3]
     Tc, MSDc = np.nan, np.nan
-    if np.all(np.isfinite([D_short, H_short, D_long, H_long])):
-        denom = 2.0 * (H_long - H_short)
-        if denom != 0 and D_short > 0 and D_long > 0:
-            Tc = (D_short / D_long) ** (1.0 / denom)
-            if Tc > 0:
-                MSDc = D_short * (Tc ** (2.0 * H_short))
+    if np.all(np.isfinite([a_s, b_s, a_l, b_l])) and a_s != a_l:
+        log_tc = (b_l - b_s) / (a_s - a_l)
+        Tc     = float(np.clip(np.exp(log_tc), dt_all[0], dt_all[-1]))
+        MSDc   = float(np.exp(a_s * np.log(Tc) + b_s))
 
     return {
         'H_short':  round(H_short, 3),
@@ -50,18 +72,15 @@ def _sda_for_signal(sig: np.ndarray, fs: float) -> Dict[str, float]:
         'D_short':  round(D_short, 3),
         'D_long':   round(D_long, 3),
         'Tc':       round(Tc, 2),    # s
-        'MSDc':     round(MSDc, 2)   # cm²
+        'MSDc':     round(MSDc, 3)   # cm²
     }
 
 
 def stochastic_metrics(x: np.ndarray, y: np.ndarray, p: Params) -> Dict[str, float]:
     fs = p.target_fs
 
-    sda_ML = _sda_for_signal(x, fs)
-    sda_AP = _sda_for_signal(y, fs)
-
-    R      = np.sqrt(x**2 + y**2)
-    sda_R  = _sda_for_signal(R, fs)
+    sda_ML = _sda_for_signal(x, fs, p)
+    sda_AP = _sda_for_signal(y, fs, p)
 
     return {
         'stc_HurstShortTerm_ML':  sda_ML['H_short'],
@@ -74,7 +93,9 @@ def stochastic_metrics(x: np.ndarray, y: np.ndarray, p: Params) -> Dict[str, flo
         'stc_DiffLongTerm_ML':    sda_ML['D_long'],
         'stc_DiffLongTerm_AP':    sda_AP['D_long'],
 
-        # Radial – global transition times
-        'stc_transTime_radial':   sda_R['Tc'],
-        'stc_MSD_radial':         sda_R['MSDc']
+        # Critical times & MSD, per axis (Quijoux et al.)
+        'stc_critTime_ML':        sda_ML['Tc'],
+        'stc_critTime_AP':        sda_AP['Tc'],
+        'stc_critMSD_ML':         sda_ML['MSDc'],
+        'stc_critMSD_AP':         sda_AP['MSDc']
     }

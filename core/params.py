@@ -78,8 +78,8 @@ def load_logo(path: str, max_size=(32, 32)):
 class Params:
     
     target_fs:    float   = 25.0             # 25 Hz (Quijoux et al.)
-    resampling:   str     = "swarii"         # "swarii" (Audiffren 2016) | "linear"
-    swarii_win_s: float   = 0.25             # fenêtre SWARII (Audiffren 2016)
+    resampling:   str     = "swarii"         # "swarii" (Audiffren & Contal, 2016) or "linear" (v2.3)
+    swarii_win_s: float   = 0.25             # SWARII window (s) (Audiffren & Contal, 2016)
     butter_order: int     = 4                # 4 (Quijoux et al.)
     butter_fc:    float   = 10.0             # 10 Hz (Quijoux et al.)
 
@@ -91,10 +91,66 @@ class Params:
     seg_seconds:   float  = 8.0
     units:         str    = "cm"  # interne pipeline
 
+    sda_tmin:      float  = 0.3   # SDA breakpoint search, lower bound (s) (Quijoux et al.)
+    sda_tmax:      float  = 2.5   # SDA breakpoint search, upper bound (s) (Quijoux et al.)
+
+    sampen_m:          int   = 2      # embedding dimension
+    sampen_r:          float = 0.2    # tolerance, x SD of the analysed signal
+    sampen_increments: bool  = True   # SampEn on COP increments (True) or positions
+
+    dfa_nmin:      int    = 4     # DFA smallest window (samples)
+    dfa_cross_s:   float  = 1.0   # DFA short/long-term crossover (s)
+
+    rqa_mode:      str    = "fixed_rr"  # "fixed_rr" or "fixed_radius"
+    rqa_rec_rate:  float  = 0.05  # fixed recurrence rate (van den Hoorn et al., 2020)
+    rqa_radius:    float  = 0.27  # fixed radius, x mean distance (van den Hoorn et al., 2020)
+    rqa_lmin:      int    = 2     # RQA minimal diagonal line length (samples)
+    rqa_fnn_thr:   float  = 0.01  # FNN rate below which the embedding dim. is kept
+    rqa_m_max:     int    = 10    # RQA maximal embedding dimension
+
 
     @property
     def target_p(self) -> float:
         return 1.0 / self.target_fs
+
+
+# -----------------------------------------------------------------------------
+# GUI advanced settings (dialog), grouped: (group, Params attribute, label)
+# -----------------------------------------------------------------------------
+
+ADVANCED_SETTINGS = [
+    ("Preprocessing",   "resampling",        "Resampling method"),
+    ("Preprocessing",   "swarii_win_s",      "SWARII window (s)"),
+    ("Preprocessing",   "target_fs",         "Target frequency (Hz)"),
+    ("Preprocessing",   "butter_fc",         "Lowpass cutoff (Hz)"),
+    ("Preprocessing",   "butter_order",      "Butterworth order"),
+
+    ("Dynamic",         "savgol_enable",     "Savitzky-Golay smoothing"),
+    ("Dynamic",         "savgol_win_s",      "SG window (s)"),
+    ("Dynamic",         "savgol_poly",       "SG polynomial order"),
+
+    ("Spectral",        "seg_seconds",       "Welch segment (s)"),
+
+    ("Stochastic",      "sda_tmin",          "SDA breakpoint min (s)"),
+    ("Stochastic",      "sda_tmax",          "SDA breakpoint max (s)"),
+
+    ("Sample Entropy",  "sampen_m",          "Embedding dimension m"),
+    ("Sample Entropy",  "sampen_r",          "Tolerance r (x SD)"),
+    ("Sample Entropy",  "sampen_increments", "On COP increments"),
+
+    ("DFA",             "dfa_nmin",          "Smallest window (samples)"),
+    ("DFA",             "dfa_cross_s",       "Short/long crossover (s)"),
+
+    ("RQA",             "rqa_mode",          "Radius mode"),
+    ("RQA",             "rqa_rec_rate",      "Fixed recurrence rate (0-1)"),
+    ("RQA",             "rqa_radius",        "Fixed radius (x mean dist.)"),
+    ("RQA",             "rqa_lmin",          "Min. diagonal line (pts)"),
+    ("RQA",             "rqa_fnn_thr",       "FNN threshold (0-1)"),
+    ("RQA",             "rqa_m_max",         "Max. embedding dimension"),
+]
+
+RQA_MODES        = ("fixed_rr", "fixed_radius")
+RESAMPLING_MODES = ("swarii", "linear")
 
 
 # -----------------------------------------------------------------------------
@@ -158,6 +214,7 @@ GUI_METRIC_LABELS = {
         "Area per second   (cm²/s) ",
         "ML phase plane            ",
         "AP phase plane            ",
+        "Fractal dimension     (-) ",
         "ML peak pos. vel.  (cm/s) ",
         "ML peak neg. vel.  (cm/s) ",
         "ML mean peak vel.  (cm/s) ",
@@ -208,8 +265,41 @@ GUI_METRIC_LABELS = {
     ],
 
     "stc_critical": [
-        "Radial trans° time Tc (s) ",
-        "Radial MSD at Tc    (cm²) ",
+        "ML crit. time Tc      (s) ",
+        "AP crit. time Tc      (s) ",
+        "ML MSD at Tc        (cm²) ",
+        "AP MSD at Tc        (cm²) ",
+    ],
+
+    # === NONLINEAR ===========================================================
+    "nl_entropy": [
+        "ML sample entropy     (-) ",
+        "AP sample entropy     (-) ",
+    ],
+
+    "nl_dfa": [
+        "ML DFA α short-term   (-) ",
+        "AP DFA α short-term   (-) ",
+        "ML DFA α long-term    (-) ",
+        "AP DFA α long-term    (-) ",
+    ],
+
+    "nl_rqa": [
+        "ML RQA recurrence     (%) ",
+        "AP RQA recurrence     (%) ",
+        "ML RQA determinism    (%) ",
+        "AP RQA determinism    (%) ",
+        "ML RQA max. line    (pts) ",
+        "AP RQA max. line    (pts) ",
+        "ML RQA line entropy   (-) ",
+        "AP RQA line entropy   (-) ",
+    ],
+
+    "nl_embedding": [
+        "ML embedding dim.     (-) ",
+        "AP embedding dim.     (-) ",
+        "ML embedding delay    (s) ",
+        "AP embedding delay    (s) ",
     ],
 }
 
@@ -264,10 +354,11 @@ METRIC_TOOLTIPS: dict[str, str] = {
     "Global mean freq.    (Hz) ": "Temporal frequency proxy: mean global velocity / mean radial distance (Hz).",
 
     # --- DYN / Advanced dynamics ---
-    "VFY                   (-) ": "VFY (dimensionless): variance of unfiltered AP velocity divided by mean AP position.",
+    "VFY                   (-) ": "VFY (cm.s⁻²): variance of the COP velocity norm divided by the mean (non-centered) AP position.\nDepends on feet placement on the board; excluded by Quijoux et al. because of measurement error.",
     "Area per second   (cm²/s) ": "Sway area rate (cm²/s) based on polygon area increments over time.",
     "ML phase plane            ": "Phase-plane index: SD(position) + SD(velocity) for ML (dimensionless).",
     "AP phase plane            ": "Phase-plane index: SD(position) + SD(velocity) for AP (dimensionless).",
+    "Fractal dimension     (-) ": "Fractal dimension (dimensionless): log(N) / log(N.d/L), with N samples, L global path length\nand d the diameter of the circle of same area as the 95% ellipse (Quijoux et al.).",
     "ML peak pos. vel.  (cm/s) ": "Mean positive peak ML velocity within sign-consistent segments (cm/s).",
     "ML peak neg. vel.  (cm/s) ": "Mean negative peak ML velocity within sign-consistent segments (cm/s).",
     "ML mean peak vel.  (cm/s) ": "Mean absolute peak ML velocity within sign-consistent segments (cm/s).",
@@ -302,16 +393,40 @@ METRIC_TOOLTIPS: dict[str, str] = {
     "AP freq. quotient     (-) ": "Frequency quotient: energy(2–5 Hz) / [energy(0–0.5 Hz)+energy(0.5–2 Hz)] for AP.",
 
     # --- STOCHASTIC / SDA ---
-    "ML ST Hurst exp.      (-) ": "Short-term Hurst exponent (dimensionless) from Stabilogram Diffusion Analysis (ML).",
+    "ML ST Hurst exp.      (-) ": "Short-term Hurst exponent (dimensionless) from Stabilogram Diffusion Analysis (ML).\nMSD(Δt) = D.Δt^(2H), log-log fits on [1/fs ; Tc] and [Tc ; T/3], breakpoint searched in [0.3 ; 2.5] s.",
     "AP ST Hurst exp.      (-) ": "Short-term Hurst exponent (dimensionless) from Stabilogram Diffusion Analysis (AP).",
     "ML LT Hurst exp.      (-) ": "Long-term Hurst exponent (dimensionless) from Stabilogram Diffusion Analysis (ML).",
     "AP LT Hurst exp.      (-) ": "Long-term Hurst exponent (dimensionless) from Stabilogram Diffusion Analysis (AP).",
-    "ML ST diffus. coeff.  (-) ": "Short-term diffusion coefficient from SDA (units depend on formulation).",
-    "AP ST diffus. coeff.  (-) ": "Short-term diffusion coefficient from SDA (units depend on formulation).",
-    "ML LT diffus. coeff.  (-) ": "Long-term diffusion coefficient from SDA (units depend on formulation).",
-    "AP LT diffus. coeff.  (-) ": "Long-term diffusion coefficient from SDA (units depend on formulation).",
+    "ML ST diffus. coeff.  (-) ": "Short-term diffusion coefficient D = exp(intercept) of the log-log fit (cm².s^-2H).",
+    "AP ST diffus. coeff.  (-) ": "Short-term diffusion coefficient D = exp(intercept) of the log-log fit (cm².s^-2H).",
+    "ML LT diffus. coeff.  (-) ": "Long-term diffusion coefficient D = exp(intercept) of the log-log fit (cm².s^-2H).",
+    "AP LT diffus. coeff.  (-) ": "Long-term diffusion coefficient D = exp(intercept) of the log-log fit (cm².s^-2H).",
 
     # --- STOCHASTIC / Critical time & MSD ---
-    "Radial trans° time Tc (s) ": "Critical (transition) time Tc (s) where short-term and long-term MSD regimes intersect.",
-    "Radial MSD at Tc    (cm²) ": "Mean Square Displacement at Tc for the radial signal (cm²).",
+    "ML crit. time Tc      (s) ": "Critical time Tc (s), ML: intersection of the short- and long-term log-log fits, bounded to [1/fs ; T/3].",
+    "AP crit. time Tc      (s) ": "Critical time Tc (s), AP: intersection of the short- and long-term log-log fits, bounded to [1/fs ; T/3].",
+    "ML MSD at Tc        (cm²) ": "Mean Square Displacement at the critical time, ML (cm²).",
+    "AP MSD at Tc        (cm²) ": "Mean Square Displacement at the critical time, AP (cm²).",
+
+    # --- NONLINEAR / Sample entropy ---
+    "ML sample entropy     (-) ": "Sample entropy SampEn(m, r) of ML COP increments by default (Richman & Moorman, 2000).\nLower = more regular. m and r (x SD) set in Parameters. Strongly depends on m, r, N and fs.",
+    "AP sample entropy     (-) ": "Sample entropy SampEn(m, r) of AP COP increments by default (Richman & Moorman, 2000).\nLower = more regular. m and r (x SD) set in Parameters. Strongly depends on m, r, N and fs.",
+
+    # --- NONLINEAR / DFA, RQA ---
+    "ML RQA recurrence     (%) ": "RQA recurrence rate (%), ML. Equals the target rate (5%) in fixed recurrence rate mode;\nmeaningful only in fixed radius mode (Advanced settings),\nwhere it can drop near 0% with high embedding dimensions.",
+    "AP RQA recurrence     (%) ": "RQA recurrence rate (%), AP. Equals the target rate (5%) in fixed recurrence rate mode;\nmeaningful only in fixed radius mode (Advanced settings),\nwhere it can drop near 0% with high embedding dimensions.",
+    "ML DFA α short-term   (-) ": "DFA scaling exponent α (ML positions), windows from 4 samples to the crossover (1 s by default).\nα ≈ 0.5 uncorrelated noise, 1 = 1/f, 1.5 = brownian motion (Peng et al., 1994).",
+    "AP DFA α short-term   (-) ": "DFA scaling exponent α (AP positions), windows from 4 samples to the crossover (1 s by default).\nα ≈ 0.5 uncorrelated noise, 1 = 1/f, 1.5 = brownian motion (Peng et al., 1994).",
+    "ML DFA α long-term    (-) ": "DFA scaling exponent α (ML positions), windows from the crossover to N/4.\nLong-term estimates are unstable on short recordings (30 s).",
+    "AP DFA α long-term    (-) ": "DFA scaling exponent α (AP positions), windows from the crossover to N/4.\nLong-term estimates are unstable on short recordings (30 s).",
+    "ML RQA determinism    (%) ": "RQA determinism (%), ML: share of recurrent points forming diagonal lines (>= 2 points).\nRadius: fixed recurrence rate (5%) or fixed radius, Theiler window (m-1).tau.",
+    "AP RQA determinism    (%) ": "RQA determinism (%), AP: share of recurrent points forming diagonal lines (>= 2 points).\nRadius: fixed recurrence rate (5%) or fixed radius, Theiler window (m-1).tau.",
+    "ML RQA max. line    (pts) ": "RQA longest diagonal line (points), ML. Related to the stability of the recurrent trajectories.",
+    "AP RQA max. line    (pts) ": "RQA longest diagonal line (points), AP. Related to the stability of the recurrent trajectories.",
+    "ML RQA line entropy   (-) ": "RQA Shannon entropy of the diagonal line length distribution, ML (complexity of the deterministic structure).",
+    "AP RQA line entropy   (-) ": "RQA Shannon entropy of the diagonal line length distribution, AP (complexity of the deterministic structure).",
+    "ML embedding dim.     (-) ": "Embedding dimension m used for RQA (ML): false nearest neighbours rate < 1% (Kennel et al., 1992).",
+    "AP embedding dim.     (-) ": "Embedding dimension m used for RQA (AP): false nearest neighbours rate < 1% (Kennel et al., 1992).",
+    "ML embedding delay    (s) ": "Embedding delay tau used for RQA (ML, s): first minimum of the average mutual information.",
+    "AP embedding delay    (s) ": "Embedding delay tau used for RQA (AP, s): first minimum of the average mutual information.",
 }
