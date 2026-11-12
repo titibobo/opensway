@@ -53,8 +53,8 @@ En-tête `# clé : valeur`, puis 8 colonnes séparées par des espaces, **donné
 
 - Ré-échantillonnage **SWARII** à 25 Hz (par défaut), fenêtre 0,25 s (Audiffren & Contal, 2016) —
   la Wii Balance Board échantillonne de façon irrégulière (~60-65 mesures distinctes/s).
-  L'interpolation linéaire de la v2.0 reste disponible (paramètre *Resampling*) ; elle redonne
-  exactement les résultats de BrainBloX Analysis v2.0.
+  L'interpolation linéaire reste disponible (Réglages avancés) ; elle redonne exactement les
+  résultats de BrainBloX Analysis v2.3.
 - Butterworth passe-bas d'ordre 4, 10 Hz, sans déphasage.
 
 ⚠️ SWARII modifie les résultats par rapport à l'interpolation linéaire de la v2.3 (fichiers
@@ -68,6 +68,10 @@ méthode (elle est inscrite dans la feuille *Settings* de l'export).
   balance in elderly people. *Physiological Reports* 9:e15067. doi:10.14814/phy2.15067
 - Audiffren J., Contal E. (2016). Preprocessing the Nintendo Wii Board Signal to Derive More
   Accurate Descriptors of Statokinesigrams. *Sensors* 16(8):1208. doi:10.3390/s16081208
+- Montesinos L. et al. (2018). On the use of approximate entropy and sample entropy with
+  centre of pressure time-series. *J NeuroEng Rehabil* 15. doi:10.1186/s12984-018-0465-9
+- Ruhe A., Fejer R., Walker B. (2010). The test-retest reliability of centre of pressure measures
+  in bipedal static task conditions – a systematic review. *Gait & Posture* 32(4):436-445.
 - Appairage Bluetooth : logique reprise de l'émulateur Dolphin (`WiimoteReal/IOWin.cpp`).
 - Protocole de la planche : wiibrew.org.
 
@@ -81,8 +85,3 @@ python opensway.py
 `acquisition/` (planche, simulateur, lecture en tâche de fond) · `core/` (format, SWARII,
 analyses v2.3, traductions) · `gui/` (interface Tkinter) · `tests/`.
 Chaque push sur `main` compile `OpenSway.exe` (GitHub Actions) ; un tag `vX.Y` publie une Release.
-
-- Montesinos L. et al. (2018). On the use of approximate entropy and sample entropy with
-  centre of pressure time-series. *J NeuroEng Rehabil* 15:116. doi:10.1186/s12984-018-0465-9
-- Ruhe A., Fejer R., Walker B. (2010). The test-retest reliability of centre of pressure measures
-  in bipedal static task conditions – a systematic review. *Gait & Posture* 32(4):436-445.
