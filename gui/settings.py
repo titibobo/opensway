@@ -2,11 +2,12 @@
 from dataclasses import fields
 
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, filedialog
 
 from core.params import Params, ADVANCED_SETTINGS, RQA_MODES, RESAMPLING_MODES
 from core.i18n import tr, get_language
-from gui.common import save_config
+from gui.common import save_config, load_config, ToolTip
+from core.norms import Norms, write_template
 
 LABEL_W = 30          # largeur des libellés (alignement des champs dans chaque cadre)
 FIELD_W = 11          # largeur des champs ; listes déroulantes : FIELD_W - 2 (+ flèche)
@@ -103,6 +104,30 @@ class SettingsPanel(ttk.Frame):
                             value=code, variable=self.var_lang, style='Toolbutton',
                             command=self._on_language).grid(row=0, column=j, padx=(0, 4))
 
+        # ---- Valeurs de référence (mise en évidence) -----------------------------
+        k += 1
+        fr = ttk.LabelFrame(body, text=tr("Reference values"), labelanchor='n', padding=(4, 2))
+        fr.grid(row=k // 3, column=k % 3, sticky='nsew', padx=6, pady=4)
+        cfg = load_config()
+        self.var_norms = tk.StringVar()
+        self._norms_label()
+        lab = ttk.Label(fr, textvariable=self.var_norms, width=LABEL_W + FIELD_W + 4, anchor='w')
+        lab.grid(row=0, column=0, columnspan=2, sticky='w', padx=4, pady=2)
+        ToolTip(lab, tr("Reference values: one row per descriptor (metric, mean, sd),\noptionally per condition "
+                        "(eyes YO/YF, surface dur/mousse).\nValues with |z| above the thresholds are coloured "
+                        "in the Analysis tab.\n« Template... » creates the file to fill in."))
+        bf = ttk.Frame(fr)
+        bf.grid(row=1, column=0, columnspan=2, sticky='w', padx=4, pady=2)
+        ttk.Button(bf, text=tr("Load..."),     command=self.load_norms).grid(row=0, column=0, padx=(0, 4))
+        ttk.Button(bf, text=tr("Template..."), command=self.save_template).grid(row=0, column=1, padx=(0, 4))
+        ttk.Button(bf, text=tr("Remove"),      command=self.remove_norms).grid(row=0, column=2)
+        self.var_z1 = tk.StringVar(value=str(cfg.get("z1", 1.96)))
+        self.var_z2 = tk.StringVar(value=str(cfg.get("z2", 3.0)))
+        for r, (txt, var) in enumerate(((tr("Threshold |z| (orange)"), self.var_z1),
+                                        (tr("Threshold |z| (red)"),    self.var_z2)), start=2):
+            ttk.Label(fr, text=txt, width=LABEL_W).grid(row=r, column=0, sticky='w', padx=4, pady=2)
+            ttk.Entry(fr, textvariable=var, width=FIELD_W).grid(row=r, column=1, sticky='w', padx=4)
+
         # ---- Boutons ------------------------------------------------------------
         btns = ttk.Frame(self)
         btns.grid(row=1, column=0, sticky='w', padx=6, pady=(10, 0))
@@ -136,6 +161,16 @@ class SettingsPanel(ttk.Frame):
             except ValueError:
                 messagebox.showerror(tr("Settings"), tr("Invalid value for '{}'.").format(attr))
                 return
+        try:
+            z1 = float(self.var_z1.get().replace(',', '.'))
+            z2 = float(self.var_z2.get().replace(',', '.'))
+        except ValueError:
+            messagebox.showerror(tr("Settings"), tr("Invalid value for '{}'.").format("|z|"))
+            return
+        cfg = load_config()
+        z_changed = (z1, z2) != (float(cfg.get("z1", 1.96)), float(cfg.get("z2", 3.0)))
+        if z_changed:
+            save_config(z1=z1, z2=z2)
         p = self.params
         changed = [a for a, v in new.items() if getattr(p, a) != v]
         for attr, v in new.items():
@@ -148,6 +183,9 @@ class SettingsPanel(ttk.Frame):
             self.var_msg.set(tr("Settings applied: results will be recomputed."))
             if ana.file_tree.selection():
                 ana.on_file_selected(None)
+        elif z_changed:
+            self.app.analysis.set_norms(self.app.analysis.norms)
+            self.var_msg.set(tr("Settings applied: results will be recomputed."))
         else:
             self.var_msg.set(tr("No change."))
 
@@ -163,3 +201,38 @@ class SettingsPanel(ttk.Frame):
         if messagebox.askyesno(tr("Language"), tr("Restart OpenSway now to change the language?\n"
                                                   "(the board will be disconnected)")):
             self.app.request_restart()
+
+    # ---- valeurs de référence ---------------------------------------------------
+    def _norms_label(self):
+        n = getattr(getattr(self.app, "analysis", None), "norms", None)
+        self.var_norms.set(f"{n.name} ({len(n)})" if n is not None else tr("No reference file"))
+
+    def load_norms(self):
+        path = filedialog.askopenfilename(title=tr("Choose a reference file"),
+                                          filetypes=[("Excel / CSV", "*.xlsx *.xls *.csv"),
+                                                     ("All", "*.*")])
+        if not path:
+            return
+        try:
+            norms = Norms.load(path)
+        except Exception as e:
+            messagebox.showerror(tr("Reference values"), str(e))
+            return
+        save_config(norms_path=path)
+        self.app.analysis.set_norms(norms)
+        self._norms_label()
+        self.var_msg.set(tr("Reference file loaded: {} descriptor(s).").format(len(norms)))
+
+    def save_template(self):
+        path = filedialog.asksaveasfilename(title=tr("Save the template"), defaultextension=".xlsx",
+                                            initialfile="OpenSway_references.xlsx",
+                                            filetypes=[("Excel", "*.xlsx"), ("CSV", "*.csv")])
+        if not path:
+            return
+        write_template(path)
+        self.var_msg.set(tr("Template saved: fill in the mean and sd columns, then load it."))
+
+    def remove_norms(self):
+        save_config(norms_path="")
+        self.app.analysis.set_norms(None)
+        self._norms_label()

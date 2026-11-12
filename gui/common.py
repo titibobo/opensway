@@ -6,7 +6,7 @@ from pathlib import Path
 
 import tkinter as tk
 
-VERSION = "1.2"
+VERSION = "1.3"
 
 
 # -----------------------------------------------------------------------------
@@ -105,9 +105,14 @@ class ToolTip:
         self._tw.wm_overrideredirect(True)
         self._tw.wm_geometry(f"+{x}+{y}")
 
+        text = self.text() if callable(self.text) else self.text
+        if not text:
+            self._tw.destroy()
+            self._tw = None
+            return
         lbl = tk.Label(
             self._tw,
-            text=self.text,
+            text=text,
             justify="left",
             relief="solid",
             borderwidth=1,
@@ -154,3 +159,75 @@ class Blitter:
         self.canvas.restore_region(self.bg)
         self._draw_artists()
         self.canvas.blit(self.canvas.figure.bbox)
+
+
+class Progress:
+    """
+    Fenêtre de progression modale : bloque les clics sur la fenêtre principale
+    pendant les traitements longs (dossiers, sujets, exports, rapports).
+    Utilisation :  with Progress(parent, "Titre", total) as pr: ... pr.step("fichier")
+    """
+    def __init__(self, parent, title: str, total: int):
+        from tkinter import ttk
+        self.parent = parent.winfo_toplevel()
+        self.total  = max(1, int(total))
+        self.k      = 0
+        self.win    = tk.Toplevel(self.parent)
+        self.win.title(title)
+        self.win.transient(self.parent)
+        self.win.resizable(False, False)
+        self.win.protocol("WM_DELETE_WINDOW", lambda: None)     # non fermable
+        frm = ttk.Frame(self.win, padding=12)
+        frm.pack(fill='both', expand=True)
+        self.var = tk.StringVar(value="")
+        ttk.Label(frm, text=title).pack(anchor='w')
+        self.bar = ttk.Progressbar(frm, length=360, mode='determinate', maximum=self.total)
+        self.bar.pack(fill='x', pady=6)
+        ttk.Label(frm, textvariable=self.var, width=56, anchor='w').pack(anchor='w')
+        center_window(self.win, self.parent)
+        try:
+            self.win.grab_set()
+        except tk.TclError:
+            pass
+        self.parent.configure(cursor='watch')
+        self.win.update()
+
+    def step(self, text: str = ""):
+        self.k += 1
+        self.bar['value'] = min(self.k, self.total)
+        self.var.set(f"{min(self.k, self.total)}/{self.total}  {text}"[:56])
+        self.win.update()
+
+    def close(self):
+        try:
+            self.win.grab_release()
+            self.win.destroy()
+        except tk.TclError:
+            pass
+        try:
+            self.parent.configure(cursor='')
+        except tk.TclError:
+            pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+        return False
+
+
+class NoProgress:
+    """Remplaçant silencieux (traitement court, ou progression déjà affichée)."""
+    def __init__(self, widget=None):
+        self.widget = widget
+
+    def step(self, text: str = ""):
+        if self.widget is not None:
+            self.widget.update_idletasks()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False

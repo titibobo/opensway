@@ -424,6 +424,46 @@ FR = {
     "mean":                             "moyenne",
     "trial":                            "essai",
     "mean of {}":                       "moyenne de {}",
+    "mean centre":                      "centre moyen",
+    "Reading files...":                 "Lecture des fichiers…",
+    "Analysing trials...":              "Analyse des essais…",
+    "Analysing files...":               "Analyse des fichiers…",
+    "Writing the report...":            "Rédaction du rapport…",
+    "Comparing...":                     "Comparaison…",
+    "all conditions":                   "toutes conditions",
+    "reference":                        "référence",
+    "Reference":                        "Référence",
+    "unusual values":                   "valeurs inhabituelles",
+    "Reference values":                 "Valeurs de référence",
+    "No reference file":                "Aucun fichier de référence",
+    "Load...":                          "Charger…",
+    "Template...":                      "Modèle…",
+    "Remove":                           "Retirer",
+    "Threshold |z| (orange)":           "Seuil |z| (orange)",
+    "Threshold |z| (red)":              "Seuil |z| (rouge)",
+    "Reference values: one row per descriptor (metric, mean, sd),\noptionally per condition (eyes YO/YF, surface dur/mousse).\n"
+    "Values with |z| above the thresholds are coloured in the Analysis tab.\n"
+    "« Template... » creates the file to fill in.":
+        "Valeurs de référence : une ligne par descripteur (metric, mean, sd),\néventuellement par condition (eyes YO/YF, surface dur/mousse).\n"
+        "Les valeurs dont |z| dépasse les seuils sont colorées dans l'onglet Analyse.\n"
+        "« Modèle… » crée le fichier à remplir.",
+    "Choose a reference file":          "Choisir un fichier de référence",
+    "Save the template":                "Enregistrer le modèle",
+    "Template saved: fill in the mean and sd columns, then load it.":
+        "Modèle enregistré : remplir les colonnes mean et sd, puis le charger.",
+    "Reference file loaded: {} descriptor(s).": "Fichier de référence chargé : {} descripteur(s).",
+    "mean statokinesigram":             "statokinésigramme moyen",
+    "sway amplitude":                   "amplitude d'oscillation",
+    "moving SD":                        "ET glissant",
+    "Plots:":                           "Graphes :",
+    "Trials":                           "Essais",
+    "Mean":                             "Moyenne",
+    "Trials: each trial plotted.\nMean: mean 95 % ellipse (mean axes and orientation),\n"
+    "mean centre ± 1 SD, and sway amplitude (2 s moving SD) mean ± 1 SD.\n"
+    "Raw displacements are not averaged: trials are not synchronised in time.":
+        "Essais : chaque essai est tracé.\nMoyenne : ellipse 95 % moyenne (axes et orientation moyens),\n"
+        "centre moyen ± 1 ET, et amplitude d'oscillation (ET glissant 2 s) moyenne ± 1 ET.\n"
+        "Les déplacements bruts ne sont pas moyennés : les essais ne sont pas synchronisés.",
 }
 
 

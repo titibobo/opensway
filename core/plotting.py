@@ -8,13 +8,32 @@ from core.stochastic_analysis  import sda_fit
 from .i18n import tr, get_language
 
 
+def _skg_limits(ax, xs, ys, min_span=8.0, margin=1.0):
+    """ Limites adaptées aux données, centre de la planche (0, 0) toujours visible,
+        étendue minimale min_span (cm) ; même échelle sur les deux axes. """
+    xs = np.concatenate([np.atleast_1d(np.asarray(v, float)) for v in xs] + [[0.0]])
+    ys = np.concatenate([np.atleast_1d(np.asarray(v, float)) for v in ys] + [[0.0]])
+    x0, x1 = float(np.nanmin(xs)) - margin, float(np.nanmax(xs)) + margin
+    y0, y1 = float(np.nanmin(ys)) - margin, float(np.nanmax(ys)) + margin
+    span = max(min_span, x1 - x0, y1 - y0)
+    cx, cy = 0.5 * (x0 + x1), 0.5 * (y0 + y1)
+    ax.set_xlim(cx - span / 2, cx + span / 2)
+    ax.set_ylim(cy - span / 2, cy + span / 2)
+
+
+def _pfx(filename: str) -> str:
+    """ Préfixe de titre : nom de l'élément (rapports PDF) ou rien (interface,
+        où le nom est affiché une seule fois au-dessus des graphes) """
+    return f"{filename} - " if filename else ""
+
+
 
 def plot_stabilogram(ax, t, x, y, filename):
     ax.clear()
 
     ax.plot(t, x, label="ML", lw=1.0, color= '#0e5780')
     ax.plot(t, y, label="AP", lw=1.0, color='#ff8d4d')
-    ax.set_title(f"{filename} - {tr('centered stabilogram')}", fontsize=9, pad=14)
+    ax.set_title(f"{_pfx(filename)}{tr('centered stabilogram')}", fontsize=9, pad=14)
     # ax.set_xlabel("Time (s)")
     # ax.set_ylabel("Position (cm)")
     ax.axhline(0, color="0.7", lw=0.8)
@@ -51,7 +70,7 @@ def plot_stabilograms(ax_ml, ax_ap, series_list, filename):
         ax.grid(True, alpha=0.25)
         ax.legend(fontsize=7, loc='upper right', ncol=min(n + 1, 4), framealpha=0.8, edgecolor='none')
     title = tr('centered stabilograms') if n > 1 else tr('centered stabilogram')
-    ax_ml.set_title(f"{filename} - {title}" + (f" ({n} {tr('trials')})" if n > 1 else ""),
+    ax_ml.set_title(f"{_pfx(filename)}{title}" + (f" ({n} {tr('trials')})" if n > 1 else ""),
                     fontsize=9, pad=5)
     ax_ap.set_xlabel(tr("Time (s)"), fontsize=8)
 
@@ -89,14 +108,13 @@ def plot_statokinesigram(ax, x_filt, y_filt, filename):
     # ax.plot(mean_ml, mean_ap, marker="+", markersize=8, color='#ae8964', mew=2.5)
 
     ax.add_patch(ell)
-    ax.set_title(f"{filename} - {tr('statokinesigram')}", fontsize=9, pad=5)
+    ax.set_title(f"{_pfx(filename)}{tr('statokinesigram')}", fontsize=9, pad=5)
     ax.set_xlabel("ML (cm)", fontsize=8)
     ax.set_ylabel("AP (cm)", fontsize=8)
     ax.tick_params(axis='both', which='major', labelsize=7)
     ax.axhline(0, color="0.7", lw=0.8)
     ax.axvline(0, color="0.7", lw=0.8)
-    ax.set_xlim(int(-12), int(12))
-    ax.set_ylim(int(-10), int(4))
+    _skg_limits(ax, [x_filt], [y_filt])
     ax.set_aspect('equal', adjustable='box')
     ax.grid(True, alpha=0.25)
 
@@ -109,7 +127,7 @@ def plot_welch_spectrum(ax, x, y, p, filename):
 
     ax.plot(f_x, Pxx_x, label="ML")
     ax.plot(f_y, Pxx_y, label="AP")
-    ax.set_title(f"{filename} - DSP (Welch, Hann)" if get_language() == "fr" else f"{filename} - PSD (Welch, Hann)", fontsize=9, pad=5)
+    ax.set_title(f"{_pfx(filename)}DSP (Welch, Hann)" if get_language() == "fr" else f"{_pfx(filename)}PSD (Welch, Hann)", fontsize=9, pad=5)
     ax.set_xlabel(tr("Frequency (Hz)"), fontsize=8)
     ax.set_ylabel(tr("Power density"), fontsize=8)
     ax.tick_params(axis='both', which='major', labelsize=7)
@@ -160,7 +178,7 @@ def plot_energy_radar(ax, metrics, filename):
     ax.plot(angles, AP_plot, label="AP", linewidth=1.2, linestyle='--')
     ax.fill(angles, ML_plot, alpha=0.1)
     ax.fill(angles, AP_plot, alpha=0.05)
-    ax.set_title(f"{filename} - {tr('Normalized Band Energy distribution')}", fontsize=9, pad=14)
+    ax.set_title(f"{_pfx(filename)}{tr('Normalized Band Energy distribution')}", fontsize=9, pad=14)
     ax.tick_params(axis='both', which='major', labelsize=7)
     ax.legend(fontsize=8, loc='upper right', bbox_to_anchor=(1.2, 1.1))
 
@@ -181,7 +199,7 @@ def plot_sda(ax, x, y, p, filename):
             ax.plot(tc, np.exp(a_s * np.log(tc) + b_s), marker='o',
                     markersize=4, color=col)
 
-    ax.set_title(f"{filename} - {tr('Stabilogram diffusion plot')}", fontsize=9, pad=5)
+    ax.set_title(f"{_pfx(filename)}{tr('Stabilogram diffusion plot')}", fontsize=9, pad=5)
     ax.set_xlabel("Δt (s)", fontsize=8)
     ax.set_ylabel("MSD (cm²)", fontsize=8)
     ax.tick_params(axis='both', which='major', labelsize=7)
@@ -203,7 +221,7 @@ def plot_dfa(ax, x, y, p, filename):
         ax.loglog(n / fs, F, marker='o', markersize=2.5, lw=0.8, label=lab, color=col)
 
     ax.axvline(p.dfa_cross_s, color="0.6", lw=0.8, linestyle='--')
-    ax.set_title(f"{filename} - {tr('DFA fluctuation function')}", fontsize=9, pad=5)
+    ax.set_title(f"{_pfx(filename)}{tr('DFA fluctuation function')}", fontsize=9, pad=5)
     ax.set_xlabel(tr("Window size (s)"), fontsize=8)
     ax.set_ylabel("F(n) (cm)", fontsize=8)
     ax.tick_params(axis='both', which='major', labelsize=7)
@@ -223,7 +241,7 @@ def plot_recurrence(ax, sig, p, filename, axis_name="AP"):
 
     ax.imshow(R, cmap='Greys', origin='lower', interpolation='nearest',
               extent=(0, T, 0, T))
-    ax.set_title(f"{filename} - {axis_name} {tr('recurrence plot')} (m={m}, τ={tau/fs:.2f} s)",
+    ax.set_title(f"{_pfx(filename)}{axis_name} {tr('recurrence plot')} (m={m}, τ={tau/fs:.2f} s)",
                  fontsize=9, pad=5)
     ax.set_xlabel(tr("Time (s)"), fontsize=8)
     ax.set_ylabel(tr("Time (s)"), fontsize=8)
@@ -255,7 +273,7 @@ def plot_stabilogram_multi(ax, series_list, filename):
         ax.plot(s['t'], s['x'], lw=0.8, color='#0e5780', alpha=alpha, label="ML" if k == 0 else None)
         ax.plot(s['t'], s['y'], lw=0.8, color='#ff8d4d', alpha=alpha, label="AP" if k == 0 else None)
 
-    ax.set_title(f"{filename} - {tr('centered stabilograms')} ({len(series_list)} {tr('trials')})", fontsize=9, pad=14)
+    ax.set_title(f"{_pfx(filename)}{tr('centered stabilograms')} ({len(series_list)} {tr('trials')})", fontsize=9, pad=14)
     ax.axhline(0, color="0.7", lw=0.8)
     ax.tick_params(axis='both', which='major', labelsize=7)
     ax.grid(True, alpha=0.25)
@@ -275,14 +293,13 @@ def plot_statokinesigram_multi(ax, series_list, filename, labels=None):
                              facecolor=col, alpha=0.15, edgecolor=col, linewidth=1.2))
         ax.plot([], [], color=col, lw=1.5, label=lab)
 
-    ax.set_title(f"{filename} - {tr('statokinesigrams')}", fontsize=9, pad=5)
+    ax.set_title(f"{_pfx(filename)}{tr('statokinesigrams')}", fontsize=9, pad=5)
     ax.set_xlabel("ML (cm)", fontsize=8)
     ax.set_ylabel("AP (cm)", fontsize=8)
     ax.tick_params(axis='both', which='major', labelsize=7)
     ax.axhline(0, color="0.7", lw=0.8)
     ax.axvline(0, color="0.7", lw=0.8)
-    ax.set_xlim(int(-12), int(12))
-    ax.set_ylim(int(-10), int(4))
+    _skg_limits(ax, [s['x_filt'] for s in series_list], [s['y_filt'] for s in series_list])
     ax.set_aspect('equal', adjustable='box')
     ax.grid(True, alpha=0.25)
     ax.legend(fontsize=7, loc='lower right')
@@ -301,7 +318,7 @@ def plot_welch_spectrum_multi(ax, series_list, p, filename):
             ax.plot(f, Pxx, lw=0.5, alpha=0.35, color=col)
         ax.plot(f0, np.mean(P, axis=0), lw=1.4, color=col, label=f"{lab} ({tr('mean')})")
 
-    ax.set_title(f"{filename} - {'DSP' if get_language() == 'fr' else 'PSD'} (Welch, Hann), {len(series_list)} {tr('trials')}", fontsize=9, pad=5)
+    ax.set_title(f"{_pfx(filename)}{'DSP' if get_language() == 'fr' else 'PSD'} (Welch, Hann), {len(series_list)} {tr('trials')}", fontsize=9, pad=5)
     ax.set_xlabel(tr("Frequency (Hz)"), fontsize=8)
     ax.set_ylabel(tr("Power density"), fontsize=8)
     ax.tick_params(axis='both', which='major', labelsize=7)
@@ -324,7 +341,7 @@ def plot_sda_multi(ax, series_list, p, filename):
         ax.loglog(curves[0][0][:n], np.mean([c[1][:n] for c in curves], axis=0),
                   lw=1.4, color=col, label=f"{lab} ({tr('mean')})")
 
-    ax.set_title(f"{filename} - {tr('Stabilogram diffusion plot')}", fontsize=9, pad=5)
+    ax.set_title(f"{_pfx(filename)}{tr('Stabilogram diffusion plot')}", fontsize=9, pad=5)
     ax.set_xlabel("Δt (s)", fontsize=8)
     ax.set_ylabel("MSD (cm²)", fontsize=8)
     ax.tick_params(axis='both', which='major', labelsize=7)
@@ -355,7 +372,7 @@ def plot_dfa_multi(ax, series_list, p, filename):
                       marker='o', markersize=2.5, lw=1.2, color=col, label=f"{lab} ({tr('mean')})")
 
     ax.axvline(p.dfa_cross_s, color="0.6", lw=0.8, linestyle='--')
-    ax.set_title(f"{filename} - {tr('DFA fluctuation function')}", fontsize=9, pad=5)
+    ax.set_title(f"{_pfx(filename)}{tr('DFA fluctuation function')}", fontsize=9, pad=5)
     ax.set_xlabel(tr("Window size (s)"), fontsize=8)
     ax.set_ylabel("F(n) (cm)", fontsize=8)
     ax.tick_params(axis='both', which='major', labelsize=7)
@@ -363,3 +380,106 @@ def plot_dfa_multi(ax, series_list, p, filename):
     ax.yaxis.set_minor_formatter(NullFormatter())
     ax.legend(fontsize=8)
     ax.grid(True, which='both', alpha=0.25)
+
+
+# =============================================================================
+# Vues « moyennées » (vue Sujets)
+# =============================================================================
+def _ellipse_params(x, y):
+    cov = np.cov(np.vstack([x, y]))
+    c = chi2.ppf(0.95, df=2)
+    vals, vecs = np.linalg.eigh(cov)
+    a = float(np.sqrt(max(vals[1], 0.0) * c))
+    b = float(np.sqrt(max(vals[0], 0.0) * c))
+    theta = float(np.arctan2(vecs[1, 1], vecs[0, 1]))       # rad, axe principal
+    return a, b, theta
+
+
+def mean_ellipse(series_list):
+    """ Ellipse 95 % moyenne des essais : centre, demi-axes a et b moyens,
+        orientation moyenne (moyenne axiale : angles doublés, car une direction
+        d'ellipse est définie à 180° près). Renvoie aussi l'ET des centres. """
+    cx = np.array([np.mean(s['x_filt']) for s in series_list])
+    cy = np.array([np.mean(s['y_filt']) for s in series_list])
+    prm = np.array([_ellipse_params(s['x_filt'], s['y_filt']) for s in series_list])
+    a, b = float(prm[:, 0].mean()), float(prm[:, 1].mean())
+    th = 0.5 * np.angle(np.mean(np.exp(2j * prm[:, 2])))
+    sd = (float(np.std(cx, ddof=1)) if len(cx) > 1 else 0.0,
+          float(np.std(cy, ddof=1)) if len(cy) > 1 else 0.0)
+    return (float(cx.mean()), float(cy.mean())), a, b, float(th), sd
+
+
+def plot_statokinesigram_mean(ax, series_list, filename):
+    """ Essais en gris clair ; ellipse 95 % moyenne avec ses axes ; centre moyen
+        avec barres ± 1 ET des centres des essais (variabilité de position). """
+    ax.clear()
+    for s in series_list:
+        ax.plot(s['x_filt'], s['y_filt'], lw=0.5, color='0.72', alpha=0.8)
+
+    (mx, my), a, b, th, (sdx, sdy) = mean_ellipse(series_list)
+    ell = Ellipse((mx, my), width=2*a, height=2*b, angle=np.degrees(th),
+                  facecolor='#fef86c', alpha=0.5, edgecolor='#ae8964', linewidth=1.5)
+    ax.add_patch(ell)
+    u = np.array([np.cos(th), np.sin(th)])
+    v = np.array([-np.sin(th), np.cos(th)])
+    ax.plot([mx - u[0]*a, mx + u[0]*a], [my - u[1]*a, my + u[1]*a], color='#ae8964', lw=1)
+    ax.plot([mx - v[0]*b, mx + v[0]*b], [my - v[1]*b, my + v[1]*b], color='#ae8964', lw=1)
+    ax.errorbar([mx], [my], xerr=[sdx], yerr=[sdy], fmt='+', color='#8a3b12',
+                ms=8, mew=2, elinewidth=1.2, capsize=3,
+                label=f"{tr('mean centre')} ± 1 {'ET' if get_language() == 'fr' else 'SD'}")
+
+    n = len(series_list)
+    ax.set_title(f"{_pfx(filename)}{tr('mean statokinesigram')} ({n} {tr('trials')})",
+                 fontsize=9, pad=5)
+    ax.set_xlabel("ML (cm)", fontsize=8)
+    ax.set_ylabel("AP (cm)", fontsize=8)
+    ax.tick_params(axis='both', which='major', labelsize=7)
+    ax.axhline(0, color="0.7", lw=0.8)
+    ax.axvline(0, color="0.7", lw=0.8)
+    _skg_limits(ax, [s['x_filt'] for s in series_list], [s['y_filt'] for s in series_list])
+    ax.set_aspect('equal', adjustable='box')
+    ax.grid(True, alpha=0.25)
+    ax.legend(fontsize=7, loc='lower right', framealpha=0.8, edgecolor='none')
+
+
+def rolling_sd(sig, fs, win_s=2.0):
+    """ Écart-type glissant centré (fenêtre win_s), même longueur que sig """
+    w = max(3, int(round(win_s * fs)))
+    pad = w // 2
+    s = np.pad(np.asarray(sig, float), (pad, w - 1 - pad), mode='reflect')
+    c1 = np.cumsum(np.r_[0.0, s])
+    c2 = np.cumsum(np.r_[0.0, s * s])
+    m  = (c1[w:] - c1[:-w]) / w
+    v  = (c2[w:] - c2[:-w]) / w - m * m
+    return np.sqrt(np.clip(v, 0, None))
+
+
+def plot_stabilograms_mean(ax_ml, ax_ap, series_list, p, filename, win_s=2.0):
+    """
+    Courbe centrale = amplitude glissante (ET sur win_s) moyennée entre essais,
+    bande = ± 1 ET entre essais. Les déplacements bruts ne sont pas moyennés :
+    les oscillations ne sont pas synchronisées d'un essai à l'autre, leur
+    moyenne point par point tendrait vers 0.
+    """
+    fs = p.target_fs
+    n_min = min(len(s['t']) for s in series_list)
+    t = series_list[0]['t'][:n_min]
+    n = len(series_list)
+    for ax, key, col, name in ((ax_ml, 'x', '#0e5780', "ML"), (ax_ap, 'y', '#e6550d', "AP")):
+        ax.clear()
+        R = np.array([rolling_sd(s[key][:n_min], fs, win_s) for s in series_list])
+        m = R.mean(axis=0)
+        sd = R.std(axis=0, ddof=1) if n > 1 else np.zeros_like(m)
+        for r in R:
+            ax.plot(t, r, color=col, lw=0.5, alpha=0.25)
+        ax.fill_between(t, m - sd, m + sd, color=col, alpha=0.18, lw=0,
+                        label=f"± 1 {'ET' if get_language() == 'fr' else 'SD'} ({n} {tr('trials')})")
+        ax.plot(t, m, color=col, lw=1.6, label=tr("mean"))
+        ax.set_ylim(bottom=0)
+        ax.set_ylabel(f"{name} (cm)", fontsize=8)
+        ax.tick_params(axis='both', which='major', labelsize=7)
+        ax.grid(True, alpha=0.25)
+        ax.legend(fontsize=7, loc='upper right', ncol=2, framealpha=0.8, edgecolor='none')
+    ax_ml.set_title(f"{_pfx(filename)}{tr('sway amplitude')} "
+                    f"({tr('moving SD')} {win_s:g} s)", fontsize=9, pad=5)
+    ax_ap.set_xlabel(tr("Time (s)"), fontsize=8)

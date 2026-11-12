@@ -29,6 +29,14 @@ Le **simulateur** permet de préparer un TP ou de découvrir le logiciel sans pl
   import par fichiers ou dossiers avec reconnaissance sujet / essai / groupe / temps / condition ;
   vue « Sujets » (moyenne ± ET) ; onglet Réglages ; rapports PDF ; export Excel
   *Means / Trials / Settings* (colonnes en anglais).
+- **Vue Sujets** : bascule *Essais* (essais superposés) / *Moyenne* (ellipse 95 % moyenne avec
+  axes et orientation moyens, centre moyen ± 1 ET ; amplitude d'oscillation = ET glissant 2 s,
+  moyenne ± 1 ET entre essais — les déplacements bruts ne sont pas moyennés, car les essais ne
+  sont pas synchronisés dans le temps).
+- **Valeurs inhabituelles** : fichier de références (onglet Réglages, modèle fourni : `metric`,
+  `mean`, `sd`, en option `eyes`, `surface`, `n`, `source`) ; cases orange / rouge au-delà de deux
+  seuils de |z| (1,96 et 3 par défaut), z et référence en infobulle. Aucune norme n'est fournie.
+- **Fenêtre de progression** pendant les traitements longs (dossiers, sujets, exports, rapports).
 - **Comparaison** (fenêtre séparée) : 2 à 6 essais ou moyennes, statokinésigrammes superposés,
   diagramme d'un descripteur, tableau avec écart et rapport au premier élément.
 - **Interface en français**, anglais au choix (onglet Réglages, relance immédiate).

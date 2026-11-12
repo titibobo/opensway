@@ -28,6 +28,9 @@ from core.fileformat         import read_header
 from core.i18n               import tr, metric_label, metric_tooltip, get_language, LANGUAGES
 
 from gui.common              import ToolTip, resource_path, center_window, save_config, VERSION
+from gui.common              import Progress, NoProgress, load_config
+from core.metric_keys        import LABEL2KEY
+from core.norms              import Norms
 
 from dataclasses import fields
 
@@ -58,6 +61,19 @@ class AnalysisPanel(ttk.Frame):
         self._iid_count    = 0
         self.factor_names  = [tr("Group"), tr("Time")]  # renamable (click on header)
 
+        self.plot_mode     = tk.StringVar(value='mean')  # vue Sujets : 'trials' | 'mean'
+        self.value_widgets: Dict[str, ttk.Label] = {}    # libellé -> case de valeur
+        self._z_text:       Dict[str, str] = {}          # libellé -> texte de l'infobulle z
+        self._progress     = None                        # fenêtre de progression active
+        self._cur_cond     = ""
+        self.norms         = None
+        cfg = load_config()
+        if cfg.get("norms_path"):
+            try:
+                self.norms = Norms.load(cfg["norms_path"])
+            except Exception:
+                self.norms = None
+
 
         self._build_layout()
 
@@ -80,8 +96,11 @@ class AnalysisPanel(ttk.Frame):
                 if tip:
                     ToolTip(label_name, tip)
 
-                ttk.Label(subframe, textvariable=var, width=15, anchor='center',
-                        relief='sunken').grid(row=i, column=1, sticky='w', padx=4, pady=1)
+                w = ttk.Label(subframe, textvariable=var, width=15, anchor='center',
+                              relief='sunken')
+                w.grid(row=i, column=1, sticky='w', padx=4, pady=1)
+                self.value_widgets[label] = w
+                ToolTip(w, lambda lab=label: self._z_text.get(lab, ""), delay_ms=200)
 
         ## =====================================================================
         ## == LEFT PANEL (CONTROLS) =====
@@ -138,6 +157,17 @@ class AnalysisPanel(ttk.Frame):
                         command=self._refresh_tree).grid(row=0, column=1, sticky='w', padx=4)
         ttk.Radiobutton(view_frm, text=tr("Subjects"), value='subjects', variable=self.view_mode,
                         command=self._refresh_tree).grid(row=0, column=2, sticky='w', padx=4)
+        ttk.Label(view_frm, text=tr("Plots:")).grid(row=1, column=0, sticky='w')
+        self._rb_plot = [
+            ttk.Radiobutton(view_frm, text=tr("Trials"), value='trials', variable=self.plot_mode,
+                            command=self._replot_unit),
+            ttk.Radiobutton(view_frm, text=tr("Mean"),   value='mean',   variable=self.plot_mode,
+                            command=self._replot_unit)]
+        for k, rb in enumerate(self._rb_plot):
+            rb.grid(row=1, column=1 + k, sticky='w', padx=4)
+            ToolTip(rb, tr("Trials: each trial plotted.\nMean: mean 95 % ellipse (mean axes and orientation),\n"
+                           "mean centre ± 1 SD, and sway amplitude (2 s moving SD) mean ± 1 SD.\n"
+                           "Raw displacements are not averaged: trials are not synchronised in time."))
 
         tree_frm = ttk.Frame(left)
         tree_frm.grid(row=5, column=0, sticky='nsew', pady=4)
@@ -195,8 +225,20 @@ class AnalysisPanel(ttk.Frame):
         ## == RIGHT PANEL (DISPLAYS) =====
         ## =====================================================================
 
-        right = ttk.Notebook(self)
-        right.grid(row=0, column=1, sticky='nsew', padx=3, pady=3)
+        rframe = ttk.Frame(self)
+        rframe.grid(row=0, column=1, sticky='nsew', padx=3, pady=3)
+        rframe.rowconfigure(1, weight=1)
+        rframe.columnconfigure(0, weight=1)
+        self.var_current = tk.StringVar(value="")
+        self.var_refinfo = tk.StringVar(value="")
+        ttk.Label(rframe, textvariable=self.var_current, anchor='w',
+                  font=(self.ui_fixed.actual('family'), 10, 'bold')).grid(row=0, column=0, sticky='ew', padx=4)
+        ttk.Label(rframe, textvariable=self.var_refinfo, anchor='e').grid(row=0, column=1, sticky='e', padx=4)
+        self.style.configure('Hi1.TLabel', background='#ffd59e')
+        self.style.configure('Hi2.TLabel', background='#ff9c9c')
+
+        right = ttk.Notebook(rframe)
+        right.grid(row=1, column=0, columnspan=2, sticky='nsew')
 
         ## ==== tab: POSITIONAL PARAMETERS =====================================
         tab_pos = ttk.Frame(right)
@@ -453,7 +495,11 @@ class AnalysisPanel(ttk.Frame):
         if not root:
             return
         paths  = sorted(str(f) for f in Path(root).rglob("*.csv"))
-        n_fact = sum(self._insert_file(p) for p in paths)
+        with self._progress_box(tr("Reading files..."), len(paths), threshold=30) as pr:
+            n_fact = 0
+            for p in paths:
+                n_fact += bool(self._insert_file(p))
+                pr.step(os.path.basename(p))
         self._refresh_tree()
         self._log(f"[Add folder] {len(paths)} csv file(s) in {os.path.basename(root)}, "
                   f"factors read for {n_fact}")
@@ -469,6 +515,8 @@ class AnalysisPanel(ttk.Frame):
 
     # == File table: Files / Subjects views ====================================
     def _refresh_tree(self):
+        for rb in getattr(self, '_rb_plot', []):
+            rb.configure(state='normal' if self.view_mode.get() == 'subjects' else 'disabled')
         tree = self.file_tree
         tree.delete(*tree.get_children())
 
@@ -655,11 +703,21 @@ class AnalysisPanel(ttk.Frame):
             return None
 
     def _show_results(self, path: str, metrics_dict: dict, series: Dict[str, np.ndarray]):
+        fid  = next((f for f, q in self.iid2path.items() if q == path), None)
+        row  = self.design.get(fid)
+        name = os.path.splitext(os.path.basename(path))[0]
+        self._cur_cond = row[5] if row else ""
+        if row:
+            label = self._unit_label(row[1], row[3], row[4], row[5])
+            self.var_current.set(f"{name}   ·   {label}" + (f"   ·   n°{row[2]}" if row[2] else ""))
+        else:
+            self.var_current.set(name)
         self._update_positional_metrics(metrics_dict)
         self._update_dynamic_metrics(metrics_dict)
         self._update_spectral_metrics(metrics_dict)
         self._update_stochastic_metrics(metrics_dict)
         self._update_nonlinear_metrics(metrics_dict)
+        self._highlight(metrics_dict)
         self._plot_series(os.path.basename(path), series, metrics_dict, self.params)
 
     def process_selected(self):
@@ -711,13 +769,36 @@ class AnalysisPanel(ttk.Frame):
     def _unit_data(self, fids: List[str]):
         """ Trials of a subject row: (series list, metrics list) of the valid files """
         series_list, metrics_list = [], []
-        for fid in fids:
-            res = self._get_results(self.iid2path[fid], " (subject)")
-            if res is not None:
-                metrics_list.append(res[0])
-                series_list.append(res[1])
-            self.update_idletasks()
+        todo = sum(self.iid2path[f] not in self.cache for f in fids)
+        with self._progress_box(tr("Analysing trials..."), todo, threshold=2) as pr:
+            for fid in fids:
+                path = self.iid2path[fid]
+                cached = path in self.cache
+                res = self._get_results(path, " (subject)")
+                if res is not None:
+                    metrics_list.append(res[0])
+                    series_list.append(res[1])
+                if not cached:
+                    pr.step(os.path.basename(path))
         return series_list, metrics_list
+
+    def _progress_box(self, title: str, total: int, threshold: int = 2):
+        """ Fenêtre de progression si le traitement est assez long et qu'aucune
+            autre n'est déjà ouverte (sinon : simple rafraîchissement). """
+        if self._progress is not None or total < threshold:
+            return NoProgress(self)
+        panel = self
+
+        class _Box(Progress):
+            def __enter__(self_):
+                panel._progress = self_
+                return self_
+
+            def __exit__(self_, *exc):
+                panel._progress = None
+                return super().__exit__(*exc)
+
+        return _Box(self, title, total)
 
     def _show_unit(self, uid: str):
         fids = self.unit2fids.get(uid)
@@ -729,7 +810,10 @@ class AnalysisPanel(ttk.Frame):
             return
 
         agg  = aggregate_metrics(metrics_list)
-        name = self._unit_label(subject, f1, f2, cond) + f" ({tr('mean of {}').format(len(series_list))})"
+        name = self._unit_label(subject, f1, f2, cond) + f"   ·   {tr('mean of {}').format(len(series_list))} {tr('trials')}"
+        self.var_current.set(name)
+        self._cur_cond = cond
+        self._last_unit = (series_list, agg)
 
         disp = with_trial_sd(agg)
         self._update_positional_metrics(disp)
@@ -737,16 +821,29 @@ class AnalysisPanel(ttk.Frame):
         self._update_spectral_metrics(agg)
         self._update_stochastic_metrics(agg)
         self._update_nonlinear_metrics(agg)
-        self._plot_subject(name, series_list, agg, self.params)
+        self._highlight(agg)
+        self._plot_subject("", series_list, agg, self.params)
+
+    def _replot_unit(self):
+        if self.view_mode.get() == 'subjects' and getattr(self, '_last_unit', None):
+            series_list, agg = self._last_unit
+            self._plot_subject("", series_list, agg, self.params)
 
     def _plot_subject(self, name: str, series_list: List[Dict[str, np.ndarray]], metrics: dict, p: Params):
 
-        # == plot: STABILOGRAMS + STATOKINESIGRAMS (trials overlaid) ===
-        pl.plot_stabilograms(self.ax_stab_ml, self.ax_stab_ap, series_list, name)
+        # == plot: STABILOGRAMS + STATOKINESIGRAMS : essais superposés ou vue moyenne ===
+        mean_view = self.plot_mode.get() == 'mean' and len(series_list) > 1
+        if mean_view:
+            pl.plot_stabilograms_mean(self.ax_stab_ml, self.ax_stab_ap, series_list, p, name)
+        else:
+            pl.plot_stabilograms(self.ax_stab_ml, self.ax_stab_ap, series_list, name)
         self.fig_stab.subplots_adjust(left=0.10, right=0.98, bottom=0.08, top=0.94, hspace=0.12)
         self.canvas_stab.draw()
 
-        pl.plot_statokinesigram_multi(self.ax_skg, series_list, name)
+        if mean_view:
+            pl.plot_statokinesigram_mean(self.ax_skg, series_list, name)
+        else:
+            pl.plot_statokinesigram_multi(self.ax_skg, series_list, name)
         self.fig_skg.subplots_adjust(left=0.12, right=0.98, bottom=0.12, top=0.88)
         self.canvas_skg.draw()
 
@@ -760,7 +857,7 @@ class AnalysisPanel(ttk.Frame):
         # ==== STOCHASTIC & NONLINEAR : SDA + DFA (overlaid) + recurrence plot (trial 1) ===
         pl.plot_sda_multi(self.ax_sda, series_list, p, name)
         pl.plot_dfa_multi(self.ax_dfa, series_list, p, name)
-        pl.plot_recurrence(self.ax_rp, series_list[0]['y'], p, name + f" {tr('trial')} 1", "AP")
+        pl.plot_recurrence(self.ax_rp, series_list[0]['y'], p, name or f"{tr('trial')} 1", "AP")
         self.fig_nl.subplots_adjust(left=0.18, right=0.96, bottom=0.07, top=0.95)
         self.canvas_nl.draw()
 
@@ -770,7 +867,7 @@ class AnalysisPanel(ttk.Frame):
         y_filt    = series['y_filt']
         x         = series['x']
         y         = series['y']
-        filename  = os.path.splitext(name)[0]
+        filename  = ""          # le nom est affiché une fois, au-dessus des graphes
 
 
         # == plot: STABILOGRAM ===
@@ -809,16 +906,17 @@ class AnalysisPanel(ttk.Frame):
         self._refresh_params()
 
         rows = []
-        for fid, (name, subject, trial, f1, f2, cond) in self.design.items():
+        with self._progress_box(tr("Analysing files..."), len(self.design), threshold=2) as pr:
+          for fid, (name, subject, trial, f1, f2, cond) in self.design.items():
             path = self.iid2path[fid]
             res  = self._get_results(path, " (export all)")
+            pr.step(name)
             if res is None:
                 continue
             eyes, _, surface = cond.partition("-")
             rows.append({'file': name, 'subject': subject, 'trial': trial,
                          'f1': f1, 'f2': f2, 'eyes': eyes, 'surface': surface,
                          'metrics': res[0]})
-            self.update_idletasks()
 
         if not rows:
             messagebox.showinfo(tr("Export Error"), tr("No metrics available to export."))
@@ -866,8 +964,10 @@ class AnalysisPanel(ttk.Frame):
 
         self._refresh_params()
 
-        with PdfPages(path_pdf) as pdf:
+        with PdfPages(path_pdf) as pdf, \
+             self._progress_box(tr("Writing the report..."), len(files), threshold=2) as pr:
             for path in files:
+                pr.step(os.path.basename(path))
                 name = os.path.splitext(os.path.basename(path))[0]
 
                 res = self._get_results(path, " (export report)")
@@ -907,8 +1007,10 @@ class AnalysisPanel(ttk.Frame):
             if (subject, f1, cond) not in targets:
                 targets.append((subject, f1, cond))
 
-        with PdfPages(path_pdf) as pdf:
+        with PdfPages(path_pdf) as pdf, \
+             self._progress_box(tr("Writing the report..."), len(targets), threshold=1) as pr:
             for subject, f1, cond in targets:
+                pr.step(self._unit_label(subject, f1, cond))
                 levels = []
                 for (s_, g_, lvl, c_), fids in units.items():
                     if (s_, g_, c_) != (subject, f1, cond):
@@ -926,6 +1028,45 @@ class AnalysisPanel(ttk.Frame):
                 self._log(f"[Report] {self._unit_label(subject, f1, cond)}: {len(levels)} condition(s)")
 
         self._log(f"[Report] Exported patient PDF: {os.path.basename(path_pdf)}")
+
+    # == Valeurs inhabituelles (normes) ========================================
+    def set_norms(self, norms):
+        self.norms = norms
+        sel = self.file_tree.selection()
+        if sel:
+            self.on_file_selected(None)
+        else:
+            self._highlight({})
+
+    def _highlight(self, metrics: dict):
+        cfg   = load_config()
+        z1    = float(cfg.get("z1", 1.96))
+        z2    = float(cfg.get("z2", 3.0))
+        eyes, _, surface = (self._cur_cond or "").partition("-")
+        n_ref = n_hi = 0
+        self._z_text.clear()
+        for label, w in self.value_widgets.items():
+            style = 'TLabel'
+            key   = LABEL2KEY.get(label)
+            if self.norms is not None and key and key in metrics:
+                z, ref = self.norms.z(key, metrics.get(key), eyes, surface)
+                if z is not None:
+                    n_ref += 1
+                    if abs(z) >= z2:
+                        style = 'Hi2.TLabel'
+                    elif abs(z) >= z1:
+                        style = 'Hi1.TLabel'
+                    n_hi += style != 'TLabel'
+                    src = f" - {ref['source']}" if 'source' in ref and str(ref['source']) not in ("", "nan") else ""
+                    cnd = " ".join(x for x in (ref['eyes'], ref['surface']) if x) or tr("all conditions")
+                    self._z_text[label] = (f"z = {z:+.2f}   ({tr('reference')} {cnd} : "
+                                           f"{ref['mean']:.3g} ± {ref['sd']:.3g}{src})")
+            w.configure(style=style)
+        if self.norms is None:
+            self.var_refinfo.set("")
+        else:
+            self.var_refinfo.set(f"{tr('Reference')} : {self.norms.name}   ·   "
+                                 f"{n_hi}/{n_ref} {tr('unusual values')} (|z| >= {z1:g})")
 
     def open_compare(self):
         from gui.compare import CompareWindow

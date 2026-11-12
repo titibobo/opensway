@@ -71,3 +71,28 @@ def test_design_names_and_folders():
     assert folder_factors("x/sim+dt_AV/P1_n°2.csv") == ("sim+dt", "AV")
     assert folder_condition("x/ttt_AV/YF-mousse/S012_3.csv") == ("YF", "mousse")
     assert export_name("Groupe") == "group" and export_name("Time") == "time"
+
+
+def test_norms_condition_and_template(tmp_path):
+    import pandas as pd
+    from core.norms import Norms, write_template
+    p = str(tmp_path / "ref.xlsx")
+    write_template(p)
+    d = pd.read_excel(p)
+    d.loc[d.metric == "pos_ellipse95_area", ["mean", "sd"]] = [2.0, 1.0]
+    yf = d[d.metric == "pos_ellipse95_area"].copy()
+    yf["eyes"], yf["mean"] = "YF", 4.0
+    pd.concat([d, yf]).to_excel(p, index=False)
+    n = Norms.load(p)
+    assert abs(n.z("pos_ellipse95_area", 5.0, "YO", "dur")[0] - 3.0) < 1e-9
+    assert abs(n.z("pos_ellipse95_area", 5.0, "YF", "dur")[0] - 1.0) < 1e-9
+    assert n.z("dyn_lfs", 1.0)[0] is None
+
+
+def test_mean_ellipse_axial_average():
+    from core.plotting import mean_ellipse
+    t = np.linspace(0, 20, 500)
+    s1 = {'x_filt': 0.2 * np.sin(t), 'y_filt': 1.0 * np.cos(1.3 * t)}
+    s2 = {'x_filt': 0.2 * np.cos(t), 'y_filt': -1.0 * np.sin(1.3 * t)}
+    (_cx, _cy), a, b, th, _sd = mean_ellipse([s1, s2])
+    assert a > b and abs(abs(np.cos(th))) < 0.2          # grand axe ≈ AP

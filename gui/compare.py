@@ -22,102 +22,7 @@ MAX_ITEMS = len(COLORS)
 FAMILIES = ['Positional Parameters', 'Dynamic Parameters', 'Spectral Analysis',
             'Stochastic & Nonlinear']
 
-METRICS = [
-    ('Positional Parameters'   , 'ML mean position     (cm) ', 'mean_ML'),
-    ('Positional Parameters'   , 'AP mean position     (cm) ', 'mean_AP'),
-    ('Positional Parameters'   , 'ML RMS               (cm) ', 'pos_rms_ML'),
-    ('Positional Parameters'   , 'AP RMS               (cm) ', 'pos_rms_AP'),
-    ('Positional Parameters'   , 'Global RMS radius    (cm) ', 'pos_rms_radius'),
-    ('Positional Parameters'   , 'Planar deviation     (cm) ', 'pos_planarDev'),
-    ('Positional Parameters'   , 'ML mean distance     (cm) ', 'pos_meanDist_ML'),
-    ('Positional Parameters'   , 'AP mean distance     (cm) ', 'pos_meanDist_AP'),
-    ('Positional Parameters'   , 'Mean radius          (cm) ', 'pos_meanDist'),
-    ('Positional Parameters'   , 'ML maximal distance  (cm) ', 'pos_max_ML'),
-    ('Positional Parameters'   , 'AP maximal distance  (cm) ', 'pos_max_AP'),
-    ('Positional Parameters'   , 'Maximal radius       (cm) ', 'pos_max_radius'),
-    ('Positional Parameters'   , 'ML range             (cm) ', 'pos_range_ML'),
-    ('Positional Parameters'   , 'AP range             (cm) ', 'pos_range_AP'),
-    ('Positional Parameters'   , 'AP-ML range          (cm) ', 'pos_range_AP-ML'),
-    ('Positional Parameters'   , 'Range ratio           (-) ', 'pos_rangeRatio'),
-    ('Positional Parameters'   , 'Sway direct° coeff.   (-) ', 'pos_swaydirCoeff'),
-    ('Positional Parameters'   , '95% ellipse area    (cm²) ', 'pos_ellipse95_area'),
-    ('Positional Parameters'   , 'Princ. sway direct°   (°) ', 'pos_princSwaydir'),
-    ('Dynamic Parameters'      , 'ML path length       (cm) ', 'dyn_length_ML'),
-    ('Dynamic Parameters'      , 'AP path length       (cm) ', 'dyn_length_AP'),
-    ('Dynamic Parameters'      , 'Global path length   (cm) ', 'dyn_length_global'),
-    ('Dynamic Parameters'      , 'LFS                (cm⁻¹) ', 'dyn_lfs'),
-    ('Dynamic Parameters'      , 'ML mean velocity   (cm/s) ', 'dyn_meanVeloc_ML'),
-    ('Dynamic Parameters'      , 'AP mean velocity   (cm/s) ', 'dyn_meanVeloc_AP'),
-    ('Dynamic Parameters'      , 'Global mean vel.   (cm/s) ', 'dyn_meanVeloc_global'),
-    ('Dynamic Parameters'      , 'ML 0-crossings set    (-) ', 'dyn_zeroCross_ML'),
-    ('Dynamic Parameters'      , 'AP 0-crossings set    (-) ', 'dyn_zeroCross_AP'),
-    ('Dynamic Parameters'      , 'ML mean frequency    (Hz) ', 'dyn_meanFreq_ML'),
-    ('Dynamic Parameters'      , 'AP mean frequency    (Hz) ', 'dyn_meanFreq_AP'),
-    ('Dynamic Parameters'      , 'Global mean freq.    (Hz) ', 'dyn_meanfreq_global'),
-    ('Dynamic Parameters'      , 'VFY                   (-) ', 'dyn_vfy'),
-    ('Dynamic Parameters'      , 'Area per second   (cm²/s) ', 'dyn_swayAreaPerS'),
-    ('Dynamic Parameters'      , 'ML phase plane            ', 'dyn_phasePlane_ML'),
-    ('Dynamic Parameters'      , 'AP phase plane            ', 'dyn_phasePlane_AP'),
-    ('Dynamic Parameters'      , 'Fractal dimension     (-) ', 'dyn_fractalDim'),
-    ('Dynamic Parameters'      , 'ML peak pos. vel.  (cm/s) ', 'dyn_mppPos_ML'),
-    ('Dynamic Parameters'      , 'ML peak neg. vel.  (cm/s) ', 'dyn_mppNeg_ML'),
-    ('Dynamic Parameters'      , 'ML mean peak vel.  (cm/s) ', 'dyn_mppAbs_ML'),
-    ('Dynamic Parameters'      , 'AP peak pos. vel.  (cm/s) ', 'dyn_mppPos_AP'),
-    ('Dynamic Parameters'      , 'AP peak neg. vel.  (cm/s) ', 'dyn_mppNeg_AP'),
-    ('Dynamic Parameters'      , 'AP mean peak vel.  (cm/s) ', 'dyn_mppAbs_AP'),
-    ('Dynamic Parameters'      , 'Mean SD peaks dist.  (cm) ', 'dyn_meanSdPeakDist'),
-    ('Dynamic Parameters'      , "Mean peaks' interval  (s) ", 'dyn_meanPeakInterval'),
-    ('Spectral Analysis'       , 'ML total power      (cm²) ', 'frq_total_power_ML'),
-    ('Spectral Analysis'       , 'AP total power      (cm²) ', 'frq_total_power_AP'),
-    ('Spectral Analysis'       , 'ML 50% power freq.   (Hz) ', 'frq_f50_ML'),
-    ('Spectral Analysis'       , 'AP 50% power freq.   (Hz) ', 'frq_f50_AP'),
-    ('Spectral Analysis'       , 'ML 95% power freq.   (Hz) ', 'frq_f95_ML'),
-    ('Spectral Analysis'       , 'AP 95% power freq.   (Hz) ', 'frq_f95_AP'),
-    ('Spectral Analysis'       , 'ML power mode        (Hz) ', 'frq_power_mode_ML'),
-    ('Spectral Analysis'       , 'AP power mode        (Hz) ', 'frq_power_mode_AP'),
-    ('Spectral Analysis'       , 'ML centroidal freq.  (Hz) ', 'frq_centroid_freq_ML'),
-    ('Spectral Analysis'       , 'AP centroidal freq.  (Hz) ', 'frq_centroid_freq_AP'),
-    ('Spectral Analysis'       , 'ML freq. dispersion   (-) ', 'frq_freq_disp_ML'),
-    ('Spectral Analysis'       , 'AP freq. dispersion   (-) ', 'frq_freq_disp_AP'),
-    ('Spectral Analysis'       , 'ML [0-0.5] Hz       (cm²) ', 'frq_energy_0_05_ML'),
-    ('Spectral Analysis'       , 'AP [0-0.5] Hz       (cm²) ', 'frq_energy_0_05_AP'),
-    ('Spectral Analysis'       , 'ML [0.5–2] Hz       (cm²) ', 'frq_energy_05_2_ML'),
-    ('Spectral Analysis'       , 'AP [0.5–2] Hz       (cm²) ', 'frq_energy_05_2_AP'),
-    ('Spectral Analysis'       , 'ML  [2–5]  Hz       (cm²) ', 'frq_energy_2_5_ML'),
-    ('Spectral Analysis'       , 'AP  [2–5]  Hz       (cm²) ', 'frq_energy_2_5_AP'),
-    ('Spectral Analysis'       , 'ML freq. quotient     (-) ', 'frq_freq_quotient_ML'),
-    ('Spectral Analysis'       , 'AP freq. quotient     (-) ', 'frq_freq_quotient_AP'),
-    ('Stochastic & Nonlinear'  , 'ML ST Hurst exp.      (-) ', 'stc_HurstShortTerm_ML'),
-    ('Stochastic & Nonlinear'  , 'AP ST Hurst exp.      (-) ', 'stc_HurstShortTerm_AP'),
-    ('Stochastic & Nonlinear'  , 'ML LT Hurst exp.      (-) ', 'stc_HurstLongTerm_ML'),
-    ('Stochastic & Nonlinear'  , 'AP LT Hurst exp.      (-) ', 'stc_HurstLongTerm_AP'),
-    ('Stochastic & Nonlinear'  , 'ML ST diffus. coeff.  (-) ', 'stc_DiffShortTerm_ML'),
-    ('Stochastic & Nonlinear'  , 'AP ST diffus. coeff.  (-) ', 'stc_DiffShortTerm_AP'),
-    ('Stochastic & Nonlinear'  , 'ML LT diffus. coeff.  (-) ', 'stc_DiffLongTerm_ML'),
-    ('Stochastic & Nonlinear'  , 'AP LT diffus. coeff.  (-) ', 'stc_DiffLongTerm_AP'),
-    ('Stochastic & Nonlinear'  , 'ML crit. time Tc      (s) ', 'stc_critTime_ML'),
-    ('Stochastic & Nonlinear'  , 'AP crit. time Tc      (s) ', 'stc_critTime_AP'),
-    ('Stochastic & Nonlinear'  , 'ML MSD at Tc        (cm²) ', 'stc_critMSD_ML'),
-    ('Stochastic & Nonlinear'  , 'AP MSD at Tc        (cm²) ', 'stc_critMSD_AP'),
-    ('Stochastic & Nonlinear'  , 'ML sample entropy     (-) ', 'nl_sampEn_ML'),
-    ('Stochastic & Nonlinear'  , 'AP sample entropy     (-) ', 'nl_sampEn_AP'),
-    ('Stochastic & Nonlinear'  , 'ML DFA α short-term   (-) ', 'nl_dfaAlphaShort_ML'),
-    ('Stochastic & Nonlinear'  , 'AP DFA α short-term   (-) ', 'nl_dfaAlphaShort_AP'),
-    ('Stochastic & Nonlinear'  , 'ML DFA α long-term    (-) ', 'nl_dfaAlphaLong_ML'),
-    ('Stochastic & Nonlinear'  , 'AP DFA α long-term    (-) ', 'nl_dfaAlphaLong_AP'),
-    ('Stochastic & Nonlinear'  , 'ML RQA recurrence     (%) ', 'nl_rqaRec_ML'),
-    ('Stochastic & Nonlinear'  , 'AP RQA recurrence     (%) ', 'nl_rqaRec_AP'),
-    ('Stochastic & Nonlinear'  , 'ML RQA determinism    (%) ', 'nl_rqaDet_ML'),
-    ('Stochastic & Nonlinear'  , 'AP RQA determinism    (%) ', 'nl_rqaDet_AP'),
-    ('Stochastic & Nonlinear'  , 'ML RQA max. line    (pts) ', 'nl_rqaLmax_ML'),
-    ('Stochastic & Nonlinear'  , 'AP RQA max. line    (pts) ', 'nl_rqaLmax_AP'),
-    ('Stochastic & Nonlinear'  , 'ML RQA line entropy   (-) ', 'nl_rqaEntr_ML'),
-    ('Stochastic & Nonlinear'  , 'AP RQA line entropy   (-) ', 'nl_rqaEntr_AP'),
-    ('Stochastic & Nonlinear'  , 'ML embedding dim.     (-) ', 'nl_rqaDim_ML'),
-    ('Stochastic & Nonlinear'  , 'AP embedding dim.     (-) ', 'nl_rqaDim_AP'),
-    ('Stochastic & Nonlinear'  , 'ML embedding delay    (s) ', 'nl_rqaDelay_ML'),
-    ('Stochastic & Nonlinear'  , 'AP embedding delay    (s) ', 'nl_rqaDelay_AP'),
-]
+from core.metric_keys import METRICS                     # noqa: E402
 
 
 FR = {
@@ -270,17 +175,17 @@ class CompareWindow(tk.Toplevel):
             return
         sel = sel[:MAX_ITEMS]
         self.data = []
-        self.config(cursor='watch'); self.update_idletasks()
-        try:
+        n_todo = sum(len(self.items[i][2]) for i in sel)
+        with self.panel._progress_box(tr("Comparing..."), n_todo, threshold=3) as pr:
             for k, iid in enumerate(sel):
                 kind, label, fids = self.items[iid]
                 series, metrics = self.panel._unit_data(fids)
+                for _ in fids:
+                    pr.step(label)
                 if not series:
                     continue
                 m = aggregate_metrics(metrics) if kind == 'mean' else metrics[0]
                 self.data.append((label, COLORS[k], series, m))
-        finally:
-            self.config(cursor='')
         self.var_msg.set("")
         self._draw_skg()
         self._fill_table()
