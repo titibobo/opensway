@@ -28,7 +28,7 @@ from core.fileformat         import read_header
 from core.i18n               import tr, metric_label, metric_tooltip, get_language, LANGUAGES
 
 from gui.common              import ToolTip, resource_path, center_window, save_config, VERSION
-from gui.common              import Progress, NoProgress, load_config
+from gui.common              import Progress, NoProgress, load_config, AutoScrollFrame
 from core.metric_keys        import LABEL2KEY
 from core.norms              import Norms
 
@@ -84,13 +84,13 @@ class AnalysisPanel(ttk.Frame):
         self.columnconfigure(1, weight=1)
         self.rowconfigure(0, weight=1)
 
-        def _metrics_enumeration(labels_list, var_group, subframe):
+        def _metrics_enumeration(labels_list, var_group, subframe, pady=1):
             for i, label in enumerate(labels_list):
                 var = tk.StringVar(value="")
                 var_group[label] = var
 
                 label_name = ttk.Label(subframe, text=metric_label(label))
-                label_name.grid(row=i, column=0, sticky='w', padx=4, pady=1)
+                label_name.grid(row=i, column=0, sticky='w', padx=4, pady=pady)
 
                 tip = metric_tooltip(label)
                 if tip:
@@ -98,7 +98,7 @@ class AnalysisPanel(ttk.Frame):
 
                 w = ttk.Label(subframe, textvariable=var, width=15, anchor='center',
                               relief='sunken')
-                w.grid(row=i, column=1, sticky='w', padx=4, pady=1)
+                w.grid(row=i, column=1, sticky='w', padx=4, pady=pady)
                 self.value_widgets[label] = w
                 ToolTip(w, lambda lab=label: self._z_text.get(lab, ""), delay_ms=200)
 
@@ -248,8 +248,9 @@ class AnalysisPanel(ttk.Frame):
         tab_pos.columnconfigure(0, weight=0)   # metrics
         tab_pos.columnconfigure(1, weight=1)   # SKG plot
 
-        pos_metrics_frm = ttk.Frame(tab_pos)
-        pos_metrics_frm.grid(row=0, column=0, sticky='nsw', padx=3, pady=3)
+        pos_scroll = AutoScrollFrame(tab_pos)
+        pos_scroll.grid(row=0, column=0, sticky='nsw', padx=3, pady=3)
+        pos_metrics_frm = pos_scroll.inner
 
         self.pos_duration_var = tk.StringVar(value="")
         
@@ -301,8 +302,9 @@ class AnalysisPanel(ttk.Frame):
         tab_dyn.columnconfigure(1, weight=1)  # plot
         tab_dyn.rowconfigure(0, weight=1)
 
-        dyn_metrics_frm = ttk.Frame(tab_dyn)
-        dyn_metrics_frm.grid(row=0, column=0, sticky='nsw', padx=3, pady=3)
+        dyn_scroll = AutoScrollFrame(tab_dyn)
+        dyn_scroll.grid(row=0, column=0, sticky='nsw', padx=3, pady=3)
+        dyn_metrics_frm = dyn_scroll.inner
       
         duration_frm = ttk.Frame(dyn_metrics_frm)
         duration_frm.grid(row=0, column=0, sticky='new', padx=0, pady=(0, 3))
@@ -317,19 +319,19 @@ class AnalysisPanel(ttk.Frame):
 
         dyn_metrics_subfrm_timedep = ttk.LabelFrame(dyn_metrics_frm,
                         text=tr("Duration-dep. Metrics"), labelanchor='n')
-        dyn_metrics_subfrm_timedep.grid(row=1, column=0, sticky='new', padx=0, pady=3)
+        dyn_metrics_subfrm_timedep.grid(row=1, column=0, sticky='new', padx=0, pady=1)
 
         dyn_metrics_subfrm_vel = ttk.LabelFrame(dyn_metrics_frm,
                         text=tr("Velocities"), labelanchor='n')
-        dyn_metrics_subfrm_vel.grid(row=2, column=0, sticky='new', padx=0, pady=3)
+        dyn_metrics_subfrm_vel.grid(row=2, column=0, sticky='new', padx=0, pady=1)
 
         dyn_metrics_subfrm_freq = ttk.LabelFrame(dyn_metrics_frm,
                         text=tr("Temporal Frequencies"), labelanchor='n')
-        dyn_metrics_subfrm_freq.grid(row=3, column=0, sticky='new', padx=0, pady=3)
+        dyn_metrics_subfrm_freq.grid(row=3, column=0, sticky='new', padx=0, pady=1)
 
         dyn_metrics_subfrm_adv = ttk.LabelFrame(dyn_metrics_frm,
                         text=tr("Advanced Dynamics"), labelanchor='n')
-        dyn_metrics_subfrm_adv.grid(row=4, column=0, sticky='new', padx=0, pady=3)
+        dyn_metrics_subfrm_adv.grid(row=4, column=0, sticky='new', padx=0, pady=1)
 
         dyn_plot_frm = ttk.Frame(tab_dyn)
         dyn_plot_frm.grid(row=0, column=1, sticky='nsew', padx=0, pady=0)
@@ -342,10 +344,10 @@ class AnalysisPanel(ttk.Frame):
 
         self.dynamic_vars: Dict[str, tk.StringVar] = {}
 
-        _metrics_enumeration(GUI_METRIC_LABELS['dyn_timedep'],      self.dynamic_vars, dyn_metrics_subfrm_timedep)
-        _metrics_enumeration(GUI_METRIC_LABELS['dyn_velocities'],   self.dynamic_vars, dyn_metrics_subfrm_vel)
-        _metrics_enumeration(GUI_METRIC_LABELS['dyn_frequencies'],  self.dynamic_vars, dyn_metrics_subfrm_freq)
-        _metrics_enumeration(GUI_METRIC_LABELS['dyn_advanced'],     self.dynamic_vars, dyn_metrics_subfrm_adv)
+        _metrics_enumeration(GUI_METRIC_LABELS['dyn_timedep'],      self.dynamic_vars, dyn_metrics_subfrm_timedep, pady=0)
+        _metrics_enumeration(GUI_METRIC_LABELS['dyn_velocities'],   self.dynamic_vars, dyn_metrics_subfrm_vel, pady=0)
+        _metrics_enumeration(GUI_METRIC_LABELS['dyn_frequencies'],  self.dynamic_vars, dyn_metrics_subfrm_freq, pady=0)
+        _metrics_enumeration(GUI_METRIC_LABELS['dyn_advanced'],     self.dynamic_vars, dyn_metrics_subfrm_adv, pady=0)
 
 
         ## ==== tab: FREQUENCY PARAMETERS ======================================
@@ -356,8 +358,10 @@ class AnalysisPanel(ttk.Frame):
         tab_psd.columnconfigure(1, weight=1)  # plot
         tab_psd.rowconfigure(0, weight=1)
         
-        psd_metrics_frm = ttk.LabelFrame(tab_psd, text=tr("Spectral Parameters"), labelanchor='n')
-        psd_metrics_frm.grid(row=0, column=0, sticky='nsw', padx=3, pady=3)
+        psd_scroll = AutoScrollFrame(tab_psd)
+        psd_scroll.grid(row=0, column=0, sticky='nsw', padx=3, pady=3)
+        psd_metrics_frm = ttk.LabelFrame(psd_scroll.inner, text=tr("Spectral Parameters"), labelanchor='n')
+        psd_metrics_frm.grid(row=0, column=0, sticky='nsw')
         
         psd_plot_frm    = ttk.Frame(tab_psd)
         psd_plot_frm.grid(row=0, column=1, sticky='nsew', padx=6, pady=6)
@@ -395,8 +399,10 @@ class AnalysisPanel(ttk.Frame):
         stc_metrics_frm = ttk.LabelFrame(tab_stc, text=tr("Stochastic Parameters"), labelanchor='n')
         stc_metrics_frm.grid(row=0, column=0, sticky='nsw', padx=3, pady=3)
 
-        nl_metrics_frm = ttk.LabelFrame(tab_stc, text=tr("Nonlinear Parameters"), labelanchor='n')
-        nl_metrics_frm.grid(row=0, column=1, sticky='nsw', padx=3, pady=3)
+        nl_scroll = AutoScrollFrame(tab_stc)
+        nl_scroll.grid(row=0, column=1, sticky='nsw', padx=3, pady=3)
+        nl_metrics_frm = ttk.LabelFrame(nl_scroll.inner, text=tr("Nonlinear Parameters"), labelanchor='n')
+        nl_metrics_frm.grid(row=0, column=0, sticky='nsw')
 
         stc_plot_frm = ttk.Frame(tab_stc)
         stc_plot_frm.grid(row=0, column=2, sticky='nsew', padx=3, pady=3)

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import tkinter as tk
 
-VERSION = "1.3"
+VERSION = "1.3.1"
 
 
 # -----------------------------------------------------------------------------
@@ -231,3 +231,40 @@ class NoProgress:
 
     def __exit__(self, *exc):
         return False
+
+
+class AutoScrollFrame(tk.Frame):
+    """
+    Cadre défilant vertical : son contenu (self.inner) s'affiche en entier si la
+    place suffit ; sinon une barre de défilement apparaît (molette active au survol).
+    Évite qu'une colonne de descripteurs soit tronquée sur un petit écran.
+    """
+    def __init__(self, master, **kw):
+        from tkinter import ttk
+        super().__init__(master, **kw)
+        bg = ttk.Style(self).lookup('TFrame', 'background') or None
+        self.canvas = tk.Canvas(self, highlightthickness=0, borderwidth=0, background=bg)
+        self.vsb    = ttk.Scrollbar(self, orient='vertical', command=self.canvas.yview)
+        self.inner  = ttk.Frame(self.canvas)
+        self._win   = self.canvas.create_window(0, 0, window=self.inner, anchor='nw')
+        self.canvas.configure(yscrollcommand=self.vsb.set)
+        self.canvas.grid(row=0, column=0, sticky='nsew')
+        self.rowconfigure(0, weight=1)
+        self.columnconfigure(0, weight=1)
+        self.inner.bind('<Configure>', self._sync)
+        self.canvas.bind('<Configure>', self._sync)
+        self.bind('<Enter>', lambda e: self.bind_all('<MouseWheel>', self._wheel))
+        self.bind('<Leave>', lambda e: self.unbind_all('<MouseWheel>'))
+
+    def _sync(self, _e=None):
+        w, h = self.inner.winfo_reqwidth(), self.inner.winfo_reqheight()
+        self.canvas.configure(width=w, height=h, scrollregion=(0, 0, w, h))
+        if h > self.canvas.winfo_height() + 1 and self.canvas.winfo_height() > 1:
+            self.vsb.grid(row=0, column=1, sticky='ns')
+        else:
+            self.vsb.grid_remove()
+            self.canvas.yview_moveto(0)
+
+    def _wheel(self, e):
+        if self.vsb.winfo_ismapped():
+            self.canvas.yview_scroll(int(-e.delta / 120) or (-1 if e.delta > 0 else 1), 'units')
