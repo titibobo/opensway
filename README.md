@@ -29,6 +29,9 @@ Le **simulateur** permet de préparer un TP ou de découvrir le logiciel sans pl
   import par fichiers ou dossiers avec reconnaissance sujet / essai / groupe / temps / condition ;
   vue « Sujets » (moyenne ± ET) ; onglet Réglages ; rapports PDF ; export Excel
   *Means / Trials / Settings* (colonnes en anglais).
+- **Onglet Essentiel** (premier onglet de l'analyse) : 14 descripteurs, un ou deux par dimension
+  (taille et direction, vitesse, fréquence, stochastique, complexité ; choix inspiré de l'ACP de
+  Rocchi, Chiari & Cappello 2004), avec statokinésigramme et stabilogrammes ML / AP.
 - **Vue Sujets** : bascule *Essais* (essais superposés) / *Moyenne* (ellipse 95 % moyenne avec
   axes et orientation moyens, centre moyen ± 1 ET ; amplitude d'oscillation = ET glissant 2 s,
   moyenne ± 1 ET entre essais — les déplacements bruts ne sont pas moyennés, car les essais ne
@@ -39,6 +42,7 @@ Le **simulateur** permet de préparer un TP ou de découvrir le logiciel sans pl
 - **Fenêtre de progression** pendant les traitements longs (dossiers, sujets, exports, rapports).
 - **Comparaison** (fenêtre séparée) : 2 à 6 essais ou moyennes, statokinésigrammes superposés,
   diagramme d'un descripteur, tableau avec écart et rapport au premier élément.
+- **Dossiers mémorisés** d'une session à l'autre (enregistrement, import, export, rapports).
 - **Interface en français**, anglais au choix (onglet Réglages, relance immédiate).
 - Lit aussi les anciens fichiers **BrainBLoX** (axe AP redressé comme dans la v2.3).
 
@@ -80,6 +84,8 @@ méthode (elle est inscrite dans la feuille *Settings* de l'export).
   centre of pressure time-series. *J NeuroEng Rehabil* 15. doi:10.1186/s12984-018-0465-9
 - Ruhe A., Fejer R., Walker B. (2010). The test-retest reliability of centre of pressure measures
   in bipedal static task conditions – a systematic review. *Gait & Posture* 32(4):436-445.
+- Rocchi L., Chiari L., Cappello A. (2004). Feature selection of stabilometric parameters based on
+  principal component analysis. *Med Biol Eng Comput* 42(1):71-79. doi:10.1007/BF02351013
 - Appairage Bluetooth : logique reprise de l'émulateur Dolphin (`WiimoteReal/IOWin.cpp`).
 - Protocole de la planche : wiibrew.org.
 
