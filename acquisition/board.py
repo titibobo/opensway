@@ -184,7 +184,9 @@ def pair_windows(timeout_mult: int = 3, log=print) -> bool:
 class BalanceBoard:
     name = "Wii Balance Board"
     def __init__(self, hid_module=None):
-        self.hid = hid_module or __import__("hid")
+        if hid_module is None:
+            import hid as hid_module     # import explicite : détecté par PyInstaller
+        self.hid = hid_module
         self.dev = None
         self.cal = None            # [[0kg, 17kg, 34kg] pour TR, BR, TL, BL]
         self.battery_raw = None

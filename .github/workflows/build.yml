@@ -31,7 +31,15 @@ jobs:
           --icon assets/ESO_logo_square.png
           --splash assets/DR_splash.png
           --add-data "assets;assets"
+          --hidden-import hid
           opensway.py
+
+      - name: Vérification (module hid inclus dans le .exe)
+        shell: pwsh
+        run: |
+          $hit = Select-String -Path build\OpenSway\*.toc -Pattern "'hid'" -SimpleMatch -Quiet
+          if (-not $hit) { Write-Error "Module hid absent du .exe"; exit 1 }
+          Write-Output "Module hid présent."
 
       - name: Artefact
         uses: actions/upload-artifact@v4
