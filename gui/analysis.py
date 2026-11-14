@@ -29,7 +29,20 @@ from core.i18n               import tr, metric_label, metric_tooltip, get_langua
 
 from gui.common              import ToolTip, resource_path, center_window, save_config, VERSION
 from gui.common              import Progress, NoProgress, load_config, AutoScrollFrame
-from core.metric_keys        import LABEL2KEY
+from core.metric_keys        import LABEL2KEY, METRICS
+
+# Vue « Essentiel » : peu de descripteurs, toutes dimensions, peu redondants
+# (inspiré de Rocchi, Chiari & Cappello 2004 : taille, direction, vitesses ML/AP,
+#  paramètres spectraux ; + temps critiques et SampEn, plus informatifs ici que
+#  la RQA (déterminisme au plafond) ou la DFA court terme (α ≈ 2)).
+_KEY2LABEL = {k: l for _f, l, k in METRICS}
+ESSENTIALS = [
+    ("Size & direction", ['pos_ellipse95_area', 'pos_rms_ML', 'pos_rms_AP', 'pos_princSwaydir']),
+    ("Velocity",         ['dyn_meanVeloc_global', 'dyn_meanVeloc_ML', 'dyn_meanVeloc_AP']),
+    ("Frequency",        ['frq_f50_ML', 'frq_f50_AP', 'frq_f95_AP']),
+    ("Stochastic",       ['stc_critTime_ML', 'stc_critTime_AP']),
+    ("Complexity",       ['nl_sampEn_ML', 'nl_sampEn_AP']),
+]
 from core.norms              import Norms
 
 from dataclasses import fields
@@ -62,7 +75,7 @@ class AnalysisPanel(ttk.Frame):
         self.factor_names  = [tr("Group"), tr("Time")]  # renamable (click on header)
 
         self.plot_mode     = tk.StringVar(value='mean')  # vue Sujets : 'trials' | 'mean'
-        self.value_widgets: Dict[str, ttk.Label] = {}    # libellé -> case de valeur
+        self.value_widgets: Dict[str, List[ttk.Label]] = {}  # libellé -> cases de valeur
         self._z_text:       Dict[str, str] = {}          # libellé -> texte de l'infobulle z
         self._progress     = None                        # fenêtre de progression active
         self._cur_cond     = ""
@@ -99,7 +112,7 @@ class AnalysisPanel(ttk.Frame):
                 w = ttk.Label(subframe, textvariable=var, width=15, anchor='center',
                               relief='sunken')
                 w.grid(row=i, column=1, sticky='w', padx=4, pady=pady)
-                self.value_widgets[label] = w
+                self.value_widgets.setdefault(label, []).append(w)
                 ToolTip(w, lambda lab=label: self._z_text.get(lab, ""), delay_ms=200)
 
         ## =====================================================================
@@ -241,6 +254,48 @@ class AnalysisPanel(ttk.Frame):
         right.grid(row=1, column=0, columnspan=2, sticky='nsew')
 
         ## ==== tab: POSITIONAL PARAMETERS =====================================
+        self.pos_duration_var = tk.StringVar(value="")
+
+        ## ==== tab: ESSENTIALS (premier onglet) ==================================
+        tab_ess = ttk.Frame(right)
+        right.add(tab_ess, text=tr("Essentials"))
+        tab_ess.columnconfigure(0, weight=0)
+        tab_ess.columnconfigure(1, weight=1)
+        tab_ess.rowconfigure(0, weight=1)
+
+        ess_scroll = AutoScrollFrame(tab_ess)
+        ess_scroll.grid(row=0, column=0, sticky='nsw', padx=3, pady=3)
+        ess_frm = ess_scroll.inner
+
+        duration_frm = ttk.Frame(ess_frm)
+        duration_frm.grid(row=0, column=0, sticky='new', padx=0, pady=(0, 3))
+        ttk.Label(duration_frm, text=metric_label("Duration              (s) ")).grid(
+            row=0, column=0, sticky='w', padx=4, pady=1)
+        ttk.Label(duration_frm, textvariable=self.pos_duration_var,
+                    width=15, anchor='center', relief='sunken').grid(
+                            row=0, column=1, sticky='w', padx=4, pady=1)
+
+        self.essential_vars: Dict[str, tk.StringVar] = {}
+        for i, (title, keys) in enumerate(ESSENTIALS, start=1):
+            fr = ttk.LabelFrame(ess_frm, text=tr(title), labelanchor='n')
+            fr.grid(row=i, column=0, sticky='new', padx=0, pady=2)
+            _metrics_enumeration([_KEY2LABEL[k] for k in keys], self.essential_vars, fr)
+        ttk.Label(ess_frm, text=tr("Selection: one or two descriptors per dimension\n"
+                                   "(after Rocchi et al., 2004). All the others are\n"
+                                   "in the following tabs and in the export."),
+                  justify='left', foreground='#666666').grid(row=len(ESSENTIALS) + 1, column=0,
+                                                             sticky='w', padx=4, pady=(6, 0))
+
+        ess_plot_frm = ttk.Frame(tab_ess)
+        ess_plot_frm.grid(row=0, column=1, sticky='nsew', padx=0, pady=0)
+        self.fig_ess = Figure(figsize=(6, 4), dpi=100)
+        gs_ess = self.fig_ess.add_gridspec(2, 2, width_ratios=[1.05, 1], hspace=0.18, wspace=0.38)
+        self.ax_ess_skg = self.fig_ess.add_subplot(gs_ess[:, 0])
+        self.ax_ess_ml  = self.fig_ess.add_subplot(gs_ess[0, 1])
+        self.ax_ess_ap  = self.fig_ess.add_subplot(gs_ess[1, 1], sharex=self.ax_ess_ml)
+        self.canvas_ess = FigureCanvasTkAgg(self.fig_ess, master=ess_plot_frm)
+        self.canvas_ess.get_tk_widget().pack(fill='both', expand=True)
+
         tab_pos = ttk.Frame(right)
         right.add(tab_pos, text=tr("Positional Parameters"))
 
@@ -252,7 +307,6 @@ class AnalysisPanel(ttk.Frame):
         pos_scroll.grid(row=0, column=0, sticky='nsw', padx=3, pady=3)
         pos_metrics_frm = pos_scroll.inner
 
-        self.pos_duration_var = tk.StringVar(value="")
         
         duration_frm = ttk.Frame(pos_metrics_frm)
         duration_frm.grid(row=0, column=0, sticky='new', padx=0, pady=(0, 3))
@@ -488,16 +542,22 @@ class AnalysisPanel(ttk.Frame):
 
     def add_files(self):
         paths = filedialog.askopenfilenames(
+            initialdir=self._last_dir(),
             title=tr("Select OpenSway / BrainBloX recordings"),
             filetypes=[("csv", "*.csv"), ("All", "*.*")]
         )
+        if paths:
+            self._remember_dir(os.path.dirname(paths[0]))
         n_fact = sum(self._insert_file(p) for p in paths)
         self._refresh_tree()
         if paths:
             self._log(f"[Add files] {len(paths)} file(s), factors read for {n_fact}")
 
     def add_folder(self):
-        root = filedialog.askdirectory(title=tr("Select a folder (csv files, sub-folders: group_time)"))
+        root = filedialog.askdirectory(initialdir=self._last_dir(),
+                                       title=tr("Select a folder (csv files, sub-folders: group_time)"))
+        if root:
+            self._remember_dir(root)
         if not root:
             return
         paths  = sorted(str(f) for f in Path(root).rglob("*.csv"))
@@ -723,6 +783,7 @@ class AnalysisPanel(ttk.Frame):
         self._update_spectral_metrics(metrics_dict)
         self._update_stochastic_metrics(metrics_dict)
         self._update_nonlinear_metrics(metrics_dict)
+        self._sync_essentials()
         self._highlight(metrics_dict)
         self._plot_series(os.path.basename(path), series, metrics_dict, self.params)
 
@@ -827,6 +888,7 @@ class AnalysisPanel(ttk.Frame):
         self._update_spectral_metrics(agg)
         self._update_stochastic_metrics(agg)
         self._update_nonlinear_metrics(agg)
+        self._sync_essentials()
         self._highlight(agg)
         self._plot_subject("", series_list, agg, self.params)
 
@@ -835,10 +897,37 @@ class AnalysisPanel(ttk.Frame):
             series_list, agg = self._last_unit
             self._plot_subject("", series_list, agg, self.params)
 
+    def _sync_essentials(self):
+        """ Onglet Essentiel : mêmes valeurs que dans les onglets détaillés """
+        sources = (self.positional_vars, self.dynamic_vars, self.spectral_vars,
+                   self.stochastic_vars, self.nonlinear_vars)
+        for label, var in self.essential_vars.items():
+            for src in sources:
+                if label in src:
+                    var.set(src[label].get())
+                    break
+
+    def _plot_essentials(self, series_list, mean_view: bool, p: Params):
+        if mean_view:
+            pl.plot_statokinesigram_mean(self.ax_ess_skg, series_list, "")
+            pl.plot_stabilograms_mean(self.ax_ess_ml, self.ax_ess_ap, series_list, p, "")
+        else:
+            if len(series_list) == 1:
+                s0 = series_list[0]
+                pl.plot_statokinesigram(self.ax_ess_skg, s0['x_filt'], s0['y_filt'], "")
+            else:
+                pl.plot_statokinesigram_multi(self.ax_ess_skg, series_list, "")
+            pl.plot_stabilograms(self.ax_ess_ml, self.ax_ess_ap, series_list, "")
+        for ax in (self.ax_ess_skg, self.ax_ess_ml):
+            ax.title.set_fontsize(8)
+        self.fig_ess.subplots_adjust(left=0.10, right=0.98, bottom=0.08, top=0.94)
+        self.canvas_ess.draw()
+
     def _plot_subject(self, name: str, series_list: List[Dict[str, np.ndarray]], metrics: dict, p: Params):
 
         # == plot: STABILOGRAMS + STATOKINESIGRAMS : essais superposés ou vue moyenne ===
         mean_view = self.plot_mode.get() == 'mean' and len(series_list) > 1
+        self._plot_essentials(series_list, mean_view, p)
         if mean_view:
             pl.plot_stabilograms_mean(self.ax_stab_ml, self.ax_stab_ap, series_list, p, name)
         else:
@@ -874,6 +963,7 @@ class AnalysisPanel(ttk.Frame):
         x         = series['x']
         y         = series['y']
         filename  = ""          # le nom est affiché une fois, au-dessus des graphes
+        self._plot_essentials([series], False, p)
 
 
         # == plot: STABILOGRAM ===
@@ -932,6 +1022,7 @@ class AnalysisPanel(ttk.Frame):
         settings      = settings_table(self.params, VERSION)
 
         path = filedialog.asksaveasfilename(
+            initialdir=self._last_dir(),
             title=tr("Export all results"),
             defaultextension=".xlsx",
             filetypes=[("Excel", "*.xlsx"), ("CSV", "*.csv")]
@@ -939,6 +1030,7 @@ class AnalysisPanel(ttk.Frame):
 
         if not path:
             return
+        self._remember_dir(os.path.dirname(path))
 
         try:
             written = write_results(path, means, trials, settings)
@@ -961,12 +1053,14 @@ class AnalysisPanel(ttk.Frame):
             return
 
         path_pdf = filedialog.asksaveasfilename(
+            initialdir=self._last_dir(),
             title=tr("Export report as PDF"),
             defaultextension=".pdf",
             filetypes=[("PDF", "*.pdf")]
         )
         if not path_pdf:
             return
+        self._remember_dir(os.path.dirname(path_pdf))
 
         self._refresh_params()
 
@@ -997,12 +1091,14 @@ class AnalysisPanel(ttk.Frame):
             return
 
         path_pdf = filedialog.asksaveasfilename(
+            initialdir=self._last_dir(),
             title=tr("Export patient report as PDF"),
             defaultextension=".pdf",
             filetypes=[("PDF", "*.pdf")]
         )
         if not path_pdf:
             return
+        self._remember_dir(os.path.dirname(path_pdf))
 
         self._refresh_params()
 
@@ -1035,6 +1131,17 @@ class AnalysisPanel(ttk.Frame):
 
         self._log(f"[Report] Exported patient PDF: {os.path.basename(path_pdf)}")
 
+    # == Dossiers mémorisés d'une session à l'autre ============================
+    @staticmethod
+    def _last_dir() -> str:
+        d = load_config().get("last_dir", "")
+        return d if d and os.path.isdir(d) else str(Path.home())
+
+    @staticmethod
+    def _remember_dir(d: str):
+        if d:
+            save_config(last_dir=d)
+
     # == Valeurs inhabituelles (normes) ========================================
     def set_norms(self, norms):
         self.norms = norms
@@ -1051,7 +1158,7 @@ class AnalysisPanel(ttk.Frame):
         eyes, _, surface = (self._cur_cond or "").partition("-")
         n_ref = n_hi = 0
         self._z_text.clear()
-        for label, w in self.value_widgets.items():
+        for label, widgets in self.value_widgets.items():
             style = 'TLabel'
             key   = LABEL2KEY.get(label)
             if self.norms is not None and key and key in metrics:
@@ -1067,7 +1174,8 @@ class AnalysisPanel(ttk.Frame):
                     cnd = " ".join(x for x in (ref['eyes'], ref['surface']) if x) or tr("all conditions")
                     self._z_text[label] = (f"z = {z:+.2f}   ({tr('reference')} {cnd} : "
                                            f"{ref['mean']:.3g} ± {ref['sd']:.3g}{src})")
-            w.configure(style=style)
+            for w in widgets:
+                w.configure(style=style)
         if self.norms is None:
             self.var_refinfo.set("")
         else:

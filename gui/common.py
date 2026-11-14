@@ -6,7 +6,7 @@ from pathlib import Path
 
 import tkinter as tk
 
-VERSION = "1.3.6"
+VERSION = "1.4.0"
 
 
 # -----------------------------------------------------------------------------

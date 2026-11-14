@@ -15,7 +15,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 from core.fileformat import write_recording
 from core.i18n import fr
-from gui.common import ToolTip, Blitter, VERSION
+from gui.common import ToolTip, Blitter, VERSION, load_config, save_config
 
 BOARD_W, BOARD_H = 51.0, 31.0          # dimensions extérieures (cm), pour le dessin
 MIN_WEIGHT_KG    = 15.0
@@ -175,7 +175,8 @@ class AcquisitionPanel(ttk.Frame):
         frm = ttk.LabelFrame(left, text=fr("Dossier d'enregistrement"))
         frm.grid(row=3, column=0, sticky='ew', pady=(8, 0))
         frm.columnconfigure(0, weight=1)
-        self.out_dir = str(Path.home() / "Documents" / "OpenSway")
+        d = load_config().get("out_dir", "")
+        self.out_dir = d if d and os.path.isdir(d) else str(Path.home() / "Documents" / "OpenSway")
         self.var_dir = tk.StringVar(value=self._short(self.out_dir))
         ttk.Label(frm, textvariable=self.var_dir, width=30, anchor='w').grid(
             row=0, column=0, sticky='ew', padx=4, pady=2)
@@ -355,6 +356,7 @@ class AcquisitionPanel(ttk.Frame):
         d = filedialog.askdirectory(initialdir=self.out_dir, title=fr("Dossier d'enregistrement"))
         if d:
             self.out_dir = d
+            save_config(out_dir=d)
             self.var_dir.set(self._short(d))
 
     def start_series(self):

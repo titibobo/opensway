@@ -367,6 +367,13 @@ FR = {
     "Dynamic":                          "Dynamique",
     "Spectral":                         "Spectral",
     "Stochastic":                       "Stochastique",
+    "Essentials":                       "Essentiel",
+    "Size & direction":                 "Taille et direction",
+    "Velocity":                         "Vitesse",
+    "Frequency":                        "Fréquence",
+    "Complexity":                       "Complexité",
+    "Selection: one or two descriptors per dimension\n(after Rocchi et al., 2004). All the others are\nin the following tabs and in the export.":
+        "Sélection : un ou deux descripteurs par dimension\n(d'après Rocchi et al., 2004). Tous les autres\nsont dans les onglets suivants et dans l'export.",
     "DFA":                              "DFA",
     "RQA":                              "RQA",
     "Resampling method":                "Ré-échantillonnage",
