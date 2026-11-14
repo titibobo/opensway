@@ -152,6 +152,7 @@ class OpenSwayApp(tk.Tk):
         nb.add(self.acquisition, text=tr("Acquisition"))
         nb.add(self.analysis,    text=tr("Analysis"))
         nb.add(self.settings,    text=tr("Settings"))
+        nb.add(self.analysis.logs_tab, text=tr("Logs"))
         self.notebook = nb
 
         self.protocol("WM_DELETE_WINDOW", self._on_close)

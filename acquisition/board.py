@@ -114,6 +114,9 @@ def pair_windows(timeout_mult: int = 3, log=print) -> bool:
     host = bytes(ri.address.rgBytes)          # ordre "inversé" usuel, comme Dolphin
     log(f"[BT] Adaptateur : {ri.szName}  ({':'.join(f'{b:02X}' for b in reversed(host))})")
     passkey = (wt.WCHAR * 6)(*[chr(b) for b in host])   # PIN = adresse hôte (bouton SYNC)
+    if 0 in host:
+        log("[BT] Attention : l'adresse Bluetooth du PC contient un octet 00. L'appairage "
+            "permanent (PIN = adresse du PC) peut échouer ; l'appairage temporaire sera tenté.")
 
     seen = set()
 
@@ -160,8 +163,15 @@ def pair_windows(timeout_mult: int = 3, log=print) -> bool:
                 log(f"[BT] Passe {it + 1}/3 : planche connectée (bouton POWER).")
             elif not d.fAuthenticated:
                 r = bt.BluetoothAuthenticateDevice(None, h_radio, ctypes.byref(d), passkey, 6)
-                log(f"[BT] Passe {it + 1}/3 : authentification code {r}"
+                log(f"[BT] Passe {it + 1}/3 : authentification (PIN permanent) code {r}"
                     + (" (OK)" if r == 0 else " (échec fréquent, on continue)"))
+                if r != 0:
+                    # Appairage temporaire : PIN = adresse de la planche elle-même
+                    # (méthode « 1+2 » des Wiimotes ; ne dépend pas de l'adresse du PC)
+                    dev_pin = (wt.WCHAR * 6)(*[chr(b) for b in bytes(d.Address.rgBytes)])
+                    r = bt.BluetoothAuthenticateDevice(None, h_radio, ctypes.byref(d), dev_pin, 6)
+                    log(f"[BT] Passe {it + 1}/3 : authentification (PIN temporaire) code {r}"
+                        + (" (OK)" if r == 0 else ""))
                 if r == 0:
                     n = wt.DWORD(0)
                     bt.BluetoothEnumerateInstalledServices(h_radio, ctypes.byref(d),

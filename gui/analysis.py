@@ -448,8 +448,8 @@ class AnalysisPanel(ttk.Frame):
 
 
         ## ==== tab: LOGS =============
-        tab_logs = ttk.Frame(right)
-        right.add(tab_logs, text=tr("Logs"))
+        tab_logs = ttk.Frame(self.master)            # onglet principal (ajouté par l'application)
+        self.logs_tab = tab_logs
         self.txt_logs = tk.Text(tab_logs, height=10)
         self.txt_logs.configure(font=self.ui_fixed)
         self.txt_logs.pack(fill='both', expand=True)
