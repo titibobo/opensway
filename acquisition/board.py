@@ -146,6 +146,10 @@ def pair_windows(timeout_mult: int = 3, log=print) -> bool:
     # 2) 3 passes : authentifier si besoin (échoue souvent avec le code 31, c'est
     #    connu), puis activer le service HID DANS TOUS LES CAS.
     log("[BT] Recherche… (la LED de la planche doit clignoter)")
+    def set_hid(d, flag):
+        return bt.BluetoothSetServiceState(h_radio, ctypes.byref(d),
+                                           ctypes.byref(HID_SERVICE), flag)
+
     ok = False
     for it in range(3):
         hits = search(inquiry=True)
@@ -153,20 +157,26 @@ def pair_windows(timeout_mult: int = 3, log=print) -> bool:
             log(f"[BT] Passe {it + 1}/3 : planche non vue.")
         for d in hits:
             if d.fConnected:
-                log(f"[BT] Passe {it + 1}/3 : planche connectée.")
-                ok = True
-                continue
-            if not d.fAuthenticated:
+                log(f"[BT] Passe {it + 1}/3 : planche connectée (bouton POWER).")
+            elif not d.fAuthenticated:
                 r = bt.BluetoothAuthenticateDevice(None, h_radio, ctypes.byref(d), passkey, 6)
                 log(f"[BT] Passe {it + 1}/3 : authentification code {r}"
-                      + (" (OK)" if r == 0 else " (échec fréquent, on continue)"))
+                    + (" (OK)" if r == 0 else " (échec fréquent, on continue)"))
                 if r == 0:
                     n = wt.DWORD(0)
                     bt.BluetoothEnumerateInstalledServices(h_radio, ctypes.byref(d),
                                                            ctypes.byref(n), None)
-            r = bt.BluetoothSetServiceState(h_radio, ctypes.byref(d),
-                                            ctypes.byref(HID_SERVICE), BLUETOOTH_SERVICE_ENABLE)
+            # Service HID : activé dans tous les cas, même planche déjà connectée.
+            # En cas de refus (ex. 0x80070057), désactivation puis réactivation :
+            # cela relance le pilote HID de Windows pour cet appareil.
+            r = set_hid(d, BLUETOOTH_SERVICE_ENABLE)
             log(f"[BT] Passe {it + 1}/3 : activation HID code {r}" + (" (OK)" if r == 0 else ""))
+            if r != 0:
+                r0 = set_hid(d, 0x00)                       # BLUETOOTH_SERVICE_DISABLE
+                time.sleep(1.0)
+                r = set_hid(d, BLUETOOTH_SERVICE_ENABLE)
+                log(f"[BT] Passe {it + 1}/3 : HID désactivé ({r0}) puis réactivé, code {r}"
+                    + (" (OK)" if r == 0 else ""))
             ok = ok or r == 0
         if ok:
             break
