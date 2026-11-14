@@ -257,6 +257,7 @@ class AcquisitionPanel(ttk.Frame):
     def connect(self):
         self.btn_connect.configure(state='disabled')
         self.var_status.set(fr("Connexion…"))
+        self.app.log(fr("[Connexion] Recherche de la planche (jusqu'à 15 s)…"))
         self.app.board.connect(self.var_source.get(), self._on_connect)
 
     def _on_connect(self, status, msg):
@@ -272,7 +273,7 @@ class AcquisitionPanel(ttk.Frame):
                        "(Si la planche a déjà été appairée sur ce PC, le bouton POWER\n"
                        "peut suffire : appuie dessus puis clique sur Annuler et réessaie.)")):
                 self.var_status.set(fr("Appairage…"))
-                self.app.log(fr("[BT] Appairage en cours (20-40 s)…"))
+                self.app.log(fr("[BT] Appairage en cours (jusqu'à 1 min 30)…"))
                 self.app.board.pair_and_connect(self._on_connect_after_pair)
                 return
         self.var_status.set(fr("Non connectée"))

@@ -535,7 +535,8 @@ EN = {
     "La planche n'est pas connectée.\n\nAppuie sur le bouton rouge SYNC (sous le capot des piles) :\nla LED clignote. Puis clique sur OK.\n\n(Si la planche a déjà été appairée sur ce PC, le bouton POWER\npeut suffire : appuie dessus puis clique sur Annuler et réessaie.)":
         "The board is not connected.\n\nPress the red SYNC button (under the battery cover):\nthe LED blinks. Then click OK.\n\n(If the board was already paired with this PC, the POWER button\nmay be enough: press it, click Cancel and try again.)",
     "Appairage…":                       "Pairing…",
-    "[BT] Appairage en cours (20-40 s)…": "[BT] Pairing (20-40 s)…",
+    "[BT] Appairage en cours (jusqu'à 1 min 30)…": "[BT] Pairing (up to 1 min 30)…",
+    "[Connexion] Recherche de la planche (jusqu'à 15 s)…": "[Connection] Looking for the board (up to 15 s)…",
     "Réessaie : bouton SYNC puis Connecter.": "Try again: SYNC button, then Connect.",
     "Calibration usine":                "Factory calibration",
     "Faire la tare maintenant ?\n(planche vide)": "Tare now?\n(empty board)",

@@ -201,6 +201,64 @@ def pair_windows(timeout_mult: int = 3, log=print) -> bool:
 # =============================================================================
 # 2) PILOTE HID DE LA PLANCHE
 # =============================================================================
+# =============================================================================
+# Envoi des commandes par HidD_SetOutputReport (Windows)
+#   Selon le pilote Bluetooth, la Wiimote / Balance Board n'accepte les commandes
+#   que par WriteFile (pile Microsoft, utilisé par hidapi) ou que par
+#   HidD_SetOutputReport (autres piles). wiiuse (BrainBLoX) et Dolphin gèrent les
+#   deux ; OpenSway essaie WriteFile puis bascule si la planche ne répond pas.
+# =============================================================================
+class _WinOutputReport:
+    def __init__(self, path):
+        import ctypes
+        from ctypes import wintypes as wt
+        self.ct, self.wt = ctypes, wt
+        self.k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        self.hid = ctypes.WinDLL("hid")
+        self.k32.CreateFileW.restype = wt.HANDLE
+        self.k32.CreateFileW.argtypes = [wt.LPCWSTR, wt.DWORD, wt.DWORD, ctypes.c_void_p,
+                                         wt.DWORD, wt.DWORD, wt.HANDLE]
+        self.k32.CloseHandle.argtypes = [wt.HANDLE]
+        self.hid.HidD_SetOutputReport.argtypes = [wt.HANDLE, ctypes.c_void_p, wt.ULONG]
+        self.hid.HidD_SetOutputReport.restype = wt.BOOLEAN
+        p = path.decode("utf-8", "replace") if isinstance(path, bytes) else str(path)
+        GENERIC_RW, SHARE_RW, OPEN_EXISTING = 0xC0000000, 0x3, 3
+        self.h = self.k32.CreateFileW(p, GENERIC_RW, SHARE_RW, None, OPEN_EXISTING, 0, None)
+        if not self.h or self.h == wt.HANDLE(-1).value:
+            raise IOError(f"Ouverture HID impossible (erreur {ctypes.get_last_error()})")
+        self.length = self._output_length() or 22
+
+    def _output_length(self) -> int:
+        ct, wt = self.ct, self.wt
+
+        class CAPS(ct.Structure):
+            _fields_ = [("Usage", wt.USHORT), ("UsagePage", wt.USHORT),
+                        ("InputReportByteLength", wt.USHORT),
+                        ("OutputReportByteLength", wt.USHORT),
+                        ("FeatureReportByteLength", wt.USHORT),
+                        ("Reserved", wt.USHORT * 17), ("Counts", wt.USHORT * 10)]
+        try:
+            pp = ct.c_void_p()
+            if not self.hid.HidD_GetPreparsedData(self.h, ct.byref(pp)):
+                return 0
+            caps = CAPS()
+            self.hid.HidP_GetCaps(pp, ct.byref(caps))
+            self.hid.HidD_FreePreparsedData(pp)
+            return int(caps.OutputReportByteLength)
+        except Exception:
+            return 0
+
+    def write(self, data) -> bool:
+        buf = (self.ct.c_ubyte * self.length)(*(list(data) + [0] * (self.length - len(data))))
+        return bool(self.hid.HidD_SetOutputReport(self.h, buf, self.length))
+
+    def close(self):
+        try:
+            self.k32.CloseHandle(self.h)
+        except Exception:
+            pass
+
+
 class BalanceBoard:
     name = "Wii Balance Board"
     def __init__(self, hid_module=None):
@@ -210,6 +268,8 @@ class BalanceBoard:
         self.dev = None
         self.cal = None            # [[0kg, 17kg, 34kg] pour TR, BR, TL, BL]
         self.battery_raw = None
+        self.write_mode = "WriteFile"
+        self._out = None           # _WinOutputReport si bascule
 
     # ---------- connexion ----------
     def open(self) -> None:
@@ -217,35 +277,53 @@ class BalanceBoard:
                  if d["product_id"] in WBB_PIDS]
         if not cands:
             raise RuntimeError("Aucune planche HID visible. Est-elle allumée / appairée ?")
+        modes = ["WriteFile"] + (["SetOutputReport"] if sys.platform == "win32" else [])
         last = None
         for c in cands:            # une Wiimote peut aussi être là : on teste chacune
-            try:
-                dev = self.hid.device()
-                dev.open_path(c["path"])
-                self.dev = dev
-                self._init_extension()
-                self.cal = self._read_calibration()
-                self.request_status()
-                self.start_stream()
-                return
-            except Exception as e:  # pas une planche ou chemin mort
-                last = e
+            for mode in modes:
+                dev = None
                 try:
-                    dev.close()
-                except Exception:
-                    pass
-                self.dev = None
+                    dev = self.hid.device()
+                    dev.open_path(c["path"])
+                    self.dev = dev
+                    self.write_mode = mode
+                    if mode == "SetOutputReport":
+                        self._out = _WinOutputReport(c["path"])
+                    self._init_extension()
+                    self.cal = self._read_calibration()
+                    self.request_status()
+                    self.start_stream()
+                    return
+                except Exception as e:  # pas une planche, chemin mort, ou mode refusé
+                    last = f"{e} [{mode}]"
+                    self._close_out()
+                    try:
+                        if dev is not None:
+                            dev.close()
+                    except Exception:
+                        pass
+                    self.dev = None
         raise RuntimeError(f"Impossible d'initialiser la planche : {last}")
 
+    def _close_out(self):
+        if self._out is not None:
+            self._out.close()
+            self._out = None
+
     def close(self):
+        self._close_out()
         if self.dev:
             self.dev.close()
             self.dev = None
 
     # ---------- bas niveau ----------
     def _write(self, data: list[int]):
+        if self._out is not None:
+            if not self._out.write(data):
+                raise IOError("Échec d'écriture HID (SetOutputReport)")
+            return
         if self.dev.write(data) < 0:
-            raise IOError("Échec d'écriture HID")
+            raise IOError("Échec d'écriture HID (WriteFile)")
 
     def _write_mem(self, addr: int, payload: bytes):
         buf = list(payload) + [0] * (16 - len(payload))

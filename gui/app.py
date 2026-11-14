@@ -51,8 +51,19 @@ class BoardManager:
                     dev.open()
                 else:
                     from acquisition.board import BalanceBoard
-                    dev = BalanceBoard()
-                    dev.open()
+                    # Après un appui sur POWER, Windows peut mettre plusieurs
+                    # secondes à présenter la planche : on réessaie pendant 15 s.
+                    t_end = time.perf_counter() + 15
+                    while True:
+                        dev = BalanceBoard()
+                        try:
+                            dev.open()
+                            break
+                        except RuntimeError:
+                            if time.perf_counter() > t_end:
+                                raise
+                            time.sleep(1.5)
+                    self.app.post(lambda m=dev.write_mode: self.app.log(f"[Connexion] mode {m}"))
                 self._start_reader(dev)
                 status, msg = "ok", f"{fr(dev.name)} : {fr('connexion établie.')}"
             except ImportError:
@@ -83,17 +94,18 @@ class BoardManager:
                     raise RuntimeError(fr("Appairage automatique disponible sous Windows uniquement."))
                 from acquisition.board import BalanceBoard, pair_windows
                 if pair_windows(log=log):
-                    t_end = time.perf_counter() + 20
+                    t_end = time.perf_counter() + 60     # installation du pilote Windows
                     while True:
                         try:
                             dev = BalanceBoard()
                             dev.open()
                             self._start_reader(dev)
+                            log(f"[Connexion] mode {dev.write_mode}")
                             status, msg = "ok", fr("Wii Balance Board appairée et connectée.")
                             break
-                        except RuntimeError:
+                        except RuntimeError as e:
                             if time.perf_counter() > t_end:
-                                msg = fr("Appairage fait, mais la planche n'apparaît pas.")
+                                msg = fr("Appairage fait, mais la planche n'apparaît pas.") + f" ({e})"
                                 break
                             time.sleep(2)
             except Exception as e:
