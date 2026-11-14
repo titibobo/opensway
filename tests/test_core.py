@@ -96,3 +96,17 @@ def test_mean_ellipse_axial_average():
     s2 = {'x_filt': 0.2 * np.cos(t), 'y_filt': -1.0 * np.sin(1.3 * t)}
     (_cx, _cy), a, b, th, _sd = mean_ellipse([s1, s2])
     assert a > b and abs(abs(np.cos(th))) < 0.2          # grand axe ≈ AP
+
+
+def test_opensway_header_overrides_folder(tmp_path):
+    from core.design import describe_file
+    d = tmp_path / "OpenSway_enregistrements" / "YO-dur"
+    d.mkdir(parents=True)
+    rec = read_recording(EXAMPLES[0])
+    rows = np.column_stack([rec.t_s * 1000, rec.sensors, rec.ml, rec.ap, rec.total])
+    p = d / "SBR_1.csv"
+    write_recording(str(p), rows, {"sujet": "SBR", "groupe": "", "temps": "", "yeux": "YO",
+                                   "surface": "dur", "essai": 1})
+    from core.fileformat import read_header
+    r = describe_file(str(p), read_header(str(p)))
+    assert r["f1"] == "" and r["f2"] == "" and r["subject"] == "SBR"

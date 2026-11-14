@@ -66,6 +66,19 @@ def describe_file(path: str, meta: Dict = None) -> Dict[str, str]:
     f1, f2         = folder_factors(path)
     eyes, surface  = folder_condition(path)
 
+    # Fichier OpenSway : l'en-tête fait foi, même pour un champ laissé vide
+    # (sinon le nom du dossier choisi pour l'enregistrement serait pris pour
+    # groupe / temps, ex. « OpenSway_enregistrements »)
+    if str(meta.get('format', '')).startswith('OpenSway'):
+        return {
+            'subject': meta.get('sujet') or subject,
+            'trial':   str(meta.get('essai') or trial),
+            'f1':      meta.get('groupe', ''),
+            'f2':      meta.get('temps', ''),
+            'eyes':    meta.get('yeux') or eyes,
+            'surface': meta.get('surface') or surface,
+        }
+
     return {
         'subject': meta.get('sujet')   or subject,
         'trial':   str(meta.get('essai') or trial),
